@@ -1,6 +1,7 @@
 package logger
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/rs/zerolog"
@@ -64,5 +65,10 @@ func (e *Event) Uint64(key string, i uint64) *Event {
 
 func (e *Event) Float64(key string, f float64) *Event {
 	e.event.Float64(key, f)
+	return e
+}
+
+func (e *Event) Ctx(ctx context.Context) *Event {
+	e.event.Ctx(ctx)
 	return e
 }

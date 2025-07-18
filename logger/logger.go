@@ -20,22 +20,23 @@ var baseLogger *Logger
 var loggerMap map[string]*Logger
 
 func init() {
-	_ = InitLogger(os.Stdout)
+	InitLogger(os.Stdout)
 }
 
-func WrapWriter(w io.Writer, options ...WriterOption) io.Writer {
-	for _, option := range options {
+func InitLogger(w io.Writer, options ...Option) {
+	c := &config{}
+	for _, opt := range options {
+		opt(c)
+	}
+
+	for _, option := range c.writerOptions {
 		w = option(w)
 	}
 
-	return w
-}
-
-func InitLogger(w io.Writer, options ...Option) error {
 	loggerMap = make(map[string]*Logger, 10)
 
 	logger := zerolog.New(w).With().Timestamp().Logger()
-	for _, option := range options {
+	for _, option := range c.loggerOptions {
 		logger = option(logger)
 	}
 
@@ -45,7 +46,6 @@ func InitLogger(w io.Writer, options ...Option) error {
 		logger: &logger,
 	}
 	loggerMap[BaseLoggerName] = baseLogger
-	return nil
 }
 
 func NewLogger(name string) *Logger {
