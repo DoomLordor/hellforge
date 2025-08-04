@@ -5,6 +5,7 @@ import (
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/prometheus/client_golang/prometheus"
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
 )
 
@@ -94,11 +95,8 @@ func WithClosers(closers ...func(ctx context.Context) error) Option {
 	}
 }
 
-func WithJaeger(address, name string) Option {
+func WithTracer(tracer trace.Tracer) Option {
 	return func(c *config) {
-		c.jaeger = &jaegerConfig{
-			address: address,
-			name:    name,
-		}
+		c.tracer = tracer
 	}
 }

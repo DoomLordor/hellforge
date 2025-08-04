@@ -7,6 +7,7 @@ import (
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/prometheus/client_golang/prometheus"
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
 )
 
@@ -14,7 +15,7 @@ type config struct {
 	httpSystem httpSystemConfig
 	http       httpConfig
 	grpc       grpcConfig
-	jaeger     *jaegerConfig
+	tracer     trace.Tracer
 	metrics    []prometheus.Collector
 	closers    []func(ctx context.Context) error
 }

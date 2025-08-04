@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	httpSwagger "github.com/swaggo/http-swagger/v2"
-	"go.opentelemetry.io/otel/trace"
 	"io"
 	"net"
 	"net/http"
@@ -15,6 +13,8 @@ import (
 	"sync/atomic"
 	"syscall"
 	"time"
+
+	httpSwagger "github.com/swaggo/http-swagger/v2"
 
 	"github.com/gorilla/mux"
 	grpcprom "github.com/grpc-ecosystem/go-grpc-middleware/providers/prometheus"
@@ -42,8 +42,6 @@ type APIServer struct {
 	httpSystemServer *http.Server
 	httpServer       *http.Server
 	grpcServer       *grpc.Server
-
-	tracer trace.Tracer
 
 	registry *prometheus.Registry
 }
@@ -73,20 +71,9 @@ func NewAPIServer(ctx context.Context, configurator Configurator) (*APIServer, e
 		cfg.metrics...,
 	)
 
-	var tracer trace.Tracer
-	if cfg.jaeger != nil {
-		tracerProvider, err := newJaegerClient(cfg.jaeger.name, cfg.jaeger.address)
-		if err != nil {
-			return nil, err
-		}
-
-		tracer = tracerProvider.Tracer("")
-	}
-
 	return &APIServer{
 		logger:   logger.NewLogger("server"),
 		config:   cfg,
-		tracer:   tracer,
 		registry: registry,
 	}, nil
 }
@@ -138,7 +125,7 @@ func (s *APIServer) grpcStart() error {
 	metricsCollector := grpcprom.NewServerMetrics(grpcprom.WithServerHandlingTimeHistogram())
 	s.registry.MustRegister(metricsCollector)
 
-	systemInterceptors := newInterceptors(s.tracer)
+	systemInterceptors := newInterceptors(s.config.tracer)
 	unaryInterceptors := make([]grpc.UnaryServerInterceptor, 0, len(s.config.grpc.unaryInterceptors)+6)
 	unaryInterceptors = append(
 		unaryInterceptors,
@@ -236,7 +223,7 @@ func (s *APIServer) httpStart(ctx context.Context) error {
 		return nil
 	}
 
-	m := newMiddlewares(s.tracer, s.config.http.erc)
+	m := newMiddlewares(s.config.tracer, s.config.http.erc)
 	s.registry.MustRegister(
 		m.metrics.requestCount,
 		m.metrics.responseCount,

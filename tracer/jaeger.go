@@ -1,4 +1,4 @@
-package apiserver
+package tracer
 
 import (
 	"context"
@@ -11,8 +11,8 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.24.0"
 )
 
-// newJaegerClient initializes an OTLP exporter
-func newJaegerClient(address, name string) (*sdktrace.TracerProvider, error) {
+// NewJaegerClient initializes an OTLP exporter
+func NewJaegerClient(address, name string) (*sdktrace.TracerProvider, error) {
 	ctx := context.Background()
 
 	// Set up the OTLP trace exporter
