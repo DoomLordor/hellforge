@@ -71,7 +71,7 @@ func WithGrpcHost(host string) Option {
 	}
 }
 
-func WithGPRCPort(port uint16) Option {
+func WithGrpcPort(port uint16) Option {
 	return func(c *config) {
 		c.grpc.port = port
 	}
