@@ -11,7 +11,13 @@ import (
 
 type Option func(c *config)
 
-func WithHTTPSystemPort(port uint16) Option {
+func WithHttpSystem(enabled bool) Option {
+	return func(c *config) {
+		c.httpSystem.enabled = enabled
+	}
+}
+
+func WithHttpSystemPort(port uint16) Option {
 	return func(c *config) {
 		c.httpSystem.port = port
 	}
@@ -23,13 +29,19 @@ func WithMetrics(metrics ...prometheus.Collector) Option {
 	}
 }
 
-func WithHTTPHost(host string) Option {
+func WithHttp(enabled bool) Option {
+	return func(c *config) {
+		c.http.enabled = enabled
+	}
+}
+
+func WithHttpHost(host string) Option {
 	return func(c *config) {
 		c.http.host = host
 	}
 }
 
-func WithHTTPPort(port uint16) Option {
+func WithHttpPort(port uint16) Option {
 	return func(c *config) {
 		c.http.port = port
 	}
@@ -47,7 +59,13 @@ func WithApi(api ...Api) Option {
 	}
 }
 
-func WithGPRCHost(host string) Option {
+func WithGrpc(enabled bool) Option {
+	return func(c *config) {
+		c.grpc.enabled = enabled
+	}
+}
+
+func WithGrpcHost(host string) Option {
 	return func(c *config) {
 		c.grpc.host = host
 	}
@@ -59,31 +77,31 @@ func WithGPRCPort(port uint16) Option {
 	}
 }
 
-func WithGRPCImplementation(implementations ...GRPC) Option {
+func WithGrpcImplementation(implementations ...Grpc) Option {
 	return func(c *config) {
 		c.grpc.implementations = append(c.grpc.implementations, implementations...)
 	}
 }
 
-func WithGRPCReflection(enabled bool) Option {
+func WithGrpcReflection(enabled bool) Option {
 	return func(c *config) {
 		c.grpc.withReflect = enabled
 	}
 }
 
-func WithGRPCUnaryInterceptors(interceptors ...grpc.UnaryServerInterceptor) Option {
+func WithGrpcUnaryInterceptors(interceptors ...grpc.UnaryServerInterceptor) Option {
 	return func(c *config) {
 		c.grpc.unaryInterceptors = append(c.grpc.unaryInterceptors, interceptors...)
 	}
 }
 
-func WithGRPCStreamInterceptors(interceptors ...grpc.StreamServerInterceptor) Option {
+func WithGrpcStreamInterceptors(interceptors ...grpc.StreamServerInterceptor) Option {
 	return func(c *config) {
 		c.grpc.streamInterceptors = append(c.grpc.streamInterceptors, interceptors...)
 	}
 }
 
-func WithGRPCMuxOptions(muxOptions ...runtime.ServeMuxOption) Option {
+func WithGrpcMuxOptions(muxOptions ...runtime.ServeMuxOption) Option {
 	return func(c *config) {
 		c.grpc.muxOptions = append(c.grpc.muxOptions, muxOptions...)
 	}

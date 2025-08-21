@@ -43,16 +43,11 @@ type grpcConfig struct {
 	gatewayEnabled     bool
 	host               string
 	port               uint16
-	implementations    []GRPC
+	implementations    []Grpc
 	unaryInterceptors  []grpc.UnaryServerInterceptor
 	streamInterceptors []grpc.StreamServerInterceptor
 	muxOptions         []runtime.ServeMuxOption
 	withReflect        bool
-}
-
-type jaegerConfig struct {
-	address string
-	name    string
 }
 
 func newConfig() *config {

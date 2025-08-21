@@ -11,7 +11,7 @@ type Configurator interface {
 	Configurate(ctx context.Context) ([]Option, error)
 }
 
-type GRPC interface {
+type Grpc interface {
 	RegisterServer(grpcServer *grpc.Server)
 	RegisterHandlerFromEndpoint(ctx context.Context, mux *runtime.ServeMux, endpoint string, opts []grpc.DialOption) error
 }
