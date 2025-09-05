@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
+	"github.com/doug-martin/goqu/v9"
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -38,6 +39,11 @@ func NewExecutor(db driver.Conn, opts ...Option) *Executor {
 	}
 
 	return e
+}
+
+// QB sets placeholder format for postgres
+func (q *Executor) QB(table any) *goqu.SelectDataset {
+	return goqu.From(table).Prepared(true)
 }
 
 func (q *Executor) Scan(ctx context.Context, sq SQLConverter, resp interface{}, scanFunc ScanFunc) error {

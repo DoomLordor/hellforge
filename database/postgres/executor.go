@@ -51,8 +51,8 @@ func NewExecutor(db *pgxpool.Pool, opts ...Option) *Executor {
 }
 
 // QB sets placeholder format for postgres
-func (q *Executor) QB() goqu.DialectWrapper {
-	return goqu.Dialect("postgres")
+func (q *Executor) QB(table any) *goqu.SelectDataset {
+	return goqu.From(table).Prepared(true).WithDialect("postgres")
 }
 
 func (q *Executor) runner(ctx context.Context) Runner {
