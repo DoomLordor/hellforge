@@ -8,7 +8,7 @@ import (
 
 type SelectOption func(qb *goqu.SelectDataset) *goqu.SelectDataset
 
-func ApplyOptions[R any](qb *goqu.SelectDataset, r R, opts func(R) []SelectOption) *goqu.SelectDataset {
+func ApplyOptions[R any](qb *goqu.SelectDataset, r *R, opts func(*R) []SelectOption) *goqu.SelectDataset {
 	if r == nil {
 		return qb
 	}
