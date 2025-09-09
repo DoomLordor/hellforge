@@ -203,7 +203,7 @@ func (s *APIServer) httpSystemStart() {
 	pprofRouter.Handle("/allocs", pprof.Handler("allocs"))
 
 	s.httpSystemServer = &http.Server{
-		Addr:         s.config.http.address(),
+		Addr:         s.config.httpSystem.address(),
 		WriteTimeout: time.Second * 100,
 		ReadTimeout:  time.Second * 100,
 		IdleTimeout:  time.Second * 100,
@@ -334,7 +334,7 @@ func (s *APIServer) httpConfigurationGateway(ctx context.Context, router *mux.Ro
 	opts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
 	muxOptions := make([]runtime.ServeMuxOption, 0, len(s.config.grpc.muxOptions))
 	muxOptions = append(muxOptions, s.config.grpc.muxOptions...)
-	grpcAddress := s.config.grpc.address()
+	grpcAddress := fmt.Sprintf(":%d", s.config.grpc.port)
 
 	withErr := false
 	for _, implementation := range s.config.grpc.implementations {
@@ -394,7 +394,7 @@ func (s *APIServer) stop(ctx context.Context) []error {
 		s.grpcServer.Stop()
 	}
 
-	if s.config.http.enabled {
+	if s.config.httpSystem.enabled {
 		err := s.httpSystemServer.Shutdown(ctx)
 		if err != nil {
 			errs = append(errs, err)
