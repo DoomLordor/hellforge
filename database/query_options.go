@@ -49,6 +49,17 @@ func OptionalFieldFilter[T any](value *T, fieldName, alias string) SelectOption 
 	}
 }
 
+func OptionalFieldFilterWithConverter[T, C any](value *T, fieldName, alias string, converter func(T) C) SelectOption {
+	fieldName = GetFieldName(fieldName, alias)
+	return func(qb *goqu.SelectDataset) *goqu.SelectDataset {
+		if value == nil {
+			return qb
+		}
+
+		return qb.Where(goqu.Ex{fieldName: converter(*value)})
+	}
+}
+
 func GetFieldName(fieldName, alias string) string {
 	if alias == "" {
 		return fieldName
