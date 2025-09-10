@@ -313,7 +313,7 @@ func (s *APIServer) httpConfigurationSwagger(router *mux.Router) error {
 		http.ServeFile(w, r, s.config.http.swaggerFile)
 	})
 
-	router.Handle("/*", httpSwagger.Handler(
+	router.PathPrefix("/").Handler(httpSwagger.Handler(
 		httpSwagger.URL("swagger.json"),
 		httpSwagger.BeforeScript(plugin),
 		httpSwagger.Plugins([]string{"UrlMutatorPlugin"}),
