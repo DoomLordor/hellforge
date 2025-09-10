@@ -334,7 +334,7 @@ func (s *APIServer) httpConfigurationGateway(ctx context.Context, router *mux.Ro
 	opts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
 	muxOptions := make([]runtime.ServeMuxOption, 0, len(s.config.grpc.muxOptions))
 	muxOptions = append(muxOptions, s.config.grpc.muxOptions...)
-	grpcAddress := fmt.Sprintf(":%d", s.config.grpc.port)
+	grpcAddress := fmt.Sprintf("localhost:%d", s.config.grpc.port)
 
 	withErr := false
 	for _, implementation := range s.config.grpc.implementations {
