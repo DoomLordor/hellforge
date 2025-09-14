@@ -349,7 +349,7 @@ func (s *APIServer) httpConfigurationGateway(ctx context.Context, router *mux.Ro
 		return FailedToRegisterGateway
 	}
 
-	router.Handle("/*", runtimeMux)
+	router.PathPrefix("/").Handler(runtimeMux)
 	return nil
 }
 
