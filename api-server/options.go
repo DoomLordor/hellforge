@@ -89,6 +89,12 @@ func WithGrpcReflection(enabled bool) Option {
 	}
 }
 
+func WithGrpcGateway(enabled bool) Option {
+	return func(c *config) {
+		c.grpc.gatewayEnabled = enabled
+	}
+}
+
 func WithGrpcUnaryInterceptors(interceptors ...grpc.UnaryServerInterceptor) Option {
 	return func(c *config) {
 		c.grpc.unaryInterceptors = append(c.grpc.unaryInterceptors, interceptors...)
