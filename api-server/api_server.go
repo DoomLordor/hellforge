@@ -391,7 +391,7 @@ func (s *APIServer) stop(ctx context.Context) []error {
 	}
 
 	if s.config.grpc.enabled {
-		s.grpcServer.Stop()
+		s.grpcServer.GracefulStop()
 	}
 
 	if s.config.httpSystem.enabled {
