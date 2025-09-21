@@ -7,12 +7,12 @@ import (
 	"github.com/doug-martin/goqu/v9"
 	_ "github.com/doug-martin/goqu/v9/dialect/postgres"
 	"github.com/jackc/pgx/v5/pgconn"
+	"go.opentelemetry.io/otel/codes"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -21,7 +21,7 @@ type Runner interface {
 	Query(ctx context.Context, query string, args ...interface{}) (pgx.Rows, error)
 }
 
-// SQLConverter query builder to sql with args converter (accept any squirrel builder interface)
+// SQLConverter query builder to sql with args converter
 type SQLConverter interface {
 	ToSQL() (string, []interface{}, error)
 }
@@ -77,8 +77,12 @@ func (q *Executor) Scan(ctx context.Context, sq SQLConverter, resp interface{}, 
 	}
 
 	err = scanFunc(ctx, q.runner(ctx), resp, query, args...)
-	if err != nil && span != nil {
-		span.SetStatus(codes.Error, err.Error())
+	if span != nil {
+		if err != nil {
+			span.SetStatus(codes.Error, err.Error())
+		} else {
+			span.SetStatus(codes.Ok, "succeeded")
+		}
 	}
 
 	return err

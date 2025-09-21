@@ -9,6 +9,7 @@ type Cache[K comparable, V any] interface {
 	Get(key K) (V, bool)
 	Set(key K, value V)
 	SetWithTTL(key K, val V, ttl time.Duration)
+	Delete(key K)
 }
 
 type value[V any] struct {
@@ -74,6 +75,12 @@ func (c *cache[K, V]) set(key K, val V, ttl time.Duration) {
 	}
 
 	c.data[key] = v
+}
+
+func (c *cache[K, V]) Delete(key K) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	delete(c.data, key)
 }
 
 func (c *cache[K, V]) clearCacheTTL() {

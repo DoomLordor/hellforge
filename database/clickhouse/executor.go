@@ -59,8 +59,12 @@ func (q *Executor) Scan(ctx context.Context, sq SQLConverter, resp interface{}, 
 	}
 
 	err = scanFunc(ctx, q.db, resp, query, args...)
-	if err != nil && span != nil {
-		span.SetStatus(codes.Error, err.Error())
+	if span != nil {
+		if err != nil {
+			span.SetStatus(codes.Error, err.Error())
+		} else {
+			span.SetStatus(codes.Ok, "succeeded")
+		}
 	}
 
 	return err
