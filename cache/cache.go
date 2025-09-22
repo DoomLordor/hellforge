@@ -12,11 +12,6 @@ type Cache[K comparable, V any] interface {
 	Delete(key K)
 }
 
-type value[V any] struct {
-	deathTime *time.Time
-	value     V
-}
-
 type cache[K comparable, V any] struct {
 	data       map[K]*value[V]
 	mu         *sync.RWMutex
@@ -50,7 +45,7 @@ func (c *cache[K, V]) Get(key K) (V, bool) {
 		return def, false
 	}
 
-	if v.deathTime.Before(time.Now()) {
+	if v.isDeath(time.Now()) {
 		return def, false
 	}
 
@@ -88,7 +83,7 @@ func (c *cache[K, V]) clearCacheTTL() {
 	defer c.mu.Unlock()
 	now := time.Now()
 	for key, val := range c.data {
-		if val.deathTime != nil && val.deathTime.Before(now) {
+		if val.isDeath(now) {
 			delete(c.data, key)
 		}
 	}
