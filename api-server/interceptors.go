@@ -6,6 +6,8 @@ import (
 	"runtime/debug"
 	"time"
 
+	govalidator "github.com/bufbuild/protovalidate-go"
+	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/protovalidate"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	otelcodes "go.opentelemetry.io/otel/codes"
@@ -144,4 +146,22 @@ func (i *interceptors) withTracing() grpc.UnaryServerInterceptor {
 
 		return resp, err
 	}
+}
+
+func (i *interceptors) withUnaryValidation() (grpc.UnaryServerInterceptor, error) {
+	v, err := govalidator.New()
+	if err != nil {
+		return nil, err
+	}
+
+	return protovalidate.UnaryServerInterceptor(v), nil
+}
+
+func (i *interceptors) withStreamValidation() (grpc.StreamServerInterceptor, error) {
+	v, err := govalidator.New()
+	if err != nil {
+		return nil, err
+	}
+
+	return protovalidate.StreamServerInterceptor(v), nil
 }

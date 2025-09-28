@@ -126,6 +126,16 @@ func (s *APIServer) grpcStart() error {
 	s.registry.MustRegister(metricsCollector)
 
 	systemInterceptors := newInterceptors(s.config.tracer)
+	unaryValidator, err := systemInterceptors.withUnaryValidation()
+	if err != nil {
+		return err
+	}
+
+	streamValidator, err := systemInterceptors.withStreamValidation()
+	if err != nil {
+		return err
+	}
+
 	unaryInterceptors := make([]grpc.UnaryServerInterceptor, 0, len(s.config.grpc.unaryInterceptors)+6)
 	unaryInterceptors = append(
 		unaryInterceptors,
@@ -134,6 +144,7 @@ func (s *APIServer) grpcStart() error {
 		systemInterceptors.withTracing(),
 		systemInterceptors.timeInterceptor(),
 		systemInterceptors.withErrorLoggingUnary(),
+		unaryValidator,
 	)
 
 	unaryInterceptors = append(unaryInterceptors, s.config.grpc.unaryInterceptors...)
@@ -144,6 +155,7 @@ func (s *APIServer) grpcStart() error {
 		metricsCollector.StreamServerInterceptor(),
 		systemInterceptors.withRecoveryStream(),
 		systemInterceptors.withErrorLoggingStream(),
+		streamValidator,
 	)
 
 	streamInterceptors = append(streamInterceptors, s.config.grpc.streamInterceptors...)
