@@ -1,26 +1,31 @@
 package producer
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/IBM/sarama"
+	"github.com/rs/zerolog"
 
 	"github.com/DoomLordor/hellforge/kafka"
 	"github.com/DoomLordor/hellforge/logger"
 )
 
+type AsyncProducer interface {
+	SendMessages(msgs ...*sarama.ProducerMessage)
+	Close() error
+}
+
 // AsyncProducer definition
-type AsyncProducer struct {
+type asyncProducer struct {
 	producer sarama.AsyncProducer
 	done     chan struct{}
-	logger   *logger.Logger
+	logger   zerolog.Logger
 }
 
 // NewAsyncProducer async producer constructor
-func NewAsyncProducer(name string, brokers []string, enabled bool, opts ...kafka.Option) (*AsyncProducer, error) {
+func NewAsyncProducer(name string, brokers []string, enabled bool, opts ...kafka.Option) (AsyncProducer, error) {
 	if !enabled {
-		return &AsyncProducer{}, nil
+		return &asyncProducer{}, nil
 	}
 
 	kafkaCfg := sarama.NewConfig()
@@ -46,10 +51,10 @@ func NewAsyncProducer(name string, brokers []string, enabled bool, opts ...kafka
 		return nil, err
 	}
 
-	producer := &AsyncProducer{
+	producer := &asyncProducer{
 		producer: kafkaProducer,
 		done:     make(chan struct{}),
-		logger:   logger.NewLogger(fmt.Sprintf("async-producer-%s", name)),
+		logger:   logger.NewLogger("kafka-async-producer").With().Str("name", name).Logger(),
 	}
 
 	go producer.logErrors()
@@ -58,7 +63,7 @@ func NewAsyncProducer(name string, brokers []string, enabled bool, opts ...kafka
 }
 
 // SendMessages produces a given messages asynchronously
-func (p *AsyncProducer) SendMessages(msgs ...*sarama.ProducerMessage) {
+func (p *asyncProducer) SendMessages(msgs ...*sarama.ProducerMessage) {
 	if p.producer == nil {
 		return
 	}
@@ -69,7 +74,7 @@ func (p *AsyncProducer) SendMessages(msgs ...*sarama.ProducerMessage) {
 }
 
 // Close shuts down the producer
-func (p *AsyncProducer) Close() error {
+func (p *asyncProducer) Close() error {
 	if p.producer == nil {
 		return nil
 	}
@@ -78,11 +83,11 @@ func (p *AsyncProducer) Close() error {
 	return p.producer.Close()
 }
 
-func (p *AsyncProducer) logErrors() {
+func (p *asyncProducer) logErrors() {
 	for {
 		select {
 		case err := <-p.producer.Errors():
-			p.logger.Err(err).Send()
+			p.logger.Err(err).Str("topic", err.Msg.Topic).Send()
 		case <-p.done:
 			return
 		}

@@ -1,6 +1,8 @@
 module github.com/DoomLordor/hellforge
 
-go 1.23.7
+go 1.24.0
+
+toolchain go1.24.8
 
 require (
 	github.com/ClickHouse/clickhouse-go/v2 v2.40.1
@@ -8,6 +10,7 @@ require (
 	github.com/bufbuild/protovalidate-go v0.9.1
 	github.com/doug-martin/goqu/v9 v9.19.0
 	github.com/georgysavva/scany/v2 v2.1.4
+	github.com/go-co-op/gocron/v2 v2.17.0
 	github.com/go-telegram-bot-api/telegram-bot-api/v5 v5.5.1
 	github.com/gorilla/mux v1.8.1
 	github.com/grpc-ecosystem/go-grpc-middleware/providers/prometheus v1.0.1
@@ -15,6 +18,7 @@ require (
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.26.1
 	github.com/jackc/pgx/v5 v5.7.5
 	github.com/prometheus/client_golang v1.21.1
+	github.com/robfig/cron/v3 v3.0.1
 	github.com/rs/zerolog v1.33.0
 	github.com/swaggo/http-swagger/v2 v2.0.2
 	github.com/xdg-go/scram v1.1.2
@@ -61,6 +65,7 @@ require (
 	github.com/jcmturner/gofork v1.7.6 // indirect
 	github.com/jcmturner/gokrb5/v8 v8.4.4 // indirect
 	github.com/jcmturner/rpc/v2 v2.0.3 // indirect
+	github.com/jonboulle/clockwork v0.5.0 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/klauspost/compress v1.18.0 // indirect
 	github.com/mailru/easyjson v0.7.6 // indirect

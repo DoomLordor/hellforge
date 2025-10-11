@@ -2,24 +2,32 @@ package consumer
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"runtime/debug"
 
 	"github.com/IBM/sarama"
-
-	"github.com/DoomLordor/hellforge/logger"
+	"github.com/rs/zerolog"
+	otelcodes "go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type consumerGroupHandler struct {
-	logger *logger.Logger
-	h      Handler
+	logger  zerolog.Logger
+	tracer  trace.Tracer
+	handler Handler
 }
 
-func newHandler(log *logger.Logger, h Handler) *consumerGroupHandler {
-	return &consumerGroupHandler{
-		logger: log,
-		h:      handlerRecover(h),
+func newHandler(logger zerolog.Logger, topics []string, handler Handler, tracer trace.Tracer) *consumerGroupHandler {
+	h := &consumerGroupHandler{
+		logger: logger.With().Strs("topics", topics).Logger(),
+		tracer: tracer,
 	}
+
+	handler = h.withRecover(handler)
+	handler = h.withTracing(handler)
+	h.handler = handler
+	return h
 }
 
 func (h *consumerGroupHandler) Setup(_ sarama.ConsumerGroupSession) error {
@@ -39,16 +47,13 @@ func (h *consumerGroupHandler) ConsumeClaim(
 		select {
 		case message, ok := <-claim.Messages():
 			if !ok {
-				h.logger.Debug().Ctx(session.Context()).Str("topic", claim.Topic()).Msg("message channel was closed for topic")
+				h.logger.Debug().Ctx(session.Context()).Msg("message channel was closed for topic")
 				return nil
 			}
 
-			err := h.h(session.Context(), message)
+			err := h.handler(session.Context(), message)
 			if err != nil {
-				h.logger.Err(err).
-					Ctx(session.Context()).
-					Str("topic", message.Topic).
-					Send()
+				h.logger.Err(err).Ctx(session.Context()).Msg("handler error")
 			}
 
 			session.MarkMessage(message, "")
@@ -59,15 +64,38 @@ func (h *consumerGroupHandler) ConsumeClaim(
 	}
 }
 
-func handlerRecover(h Handler) Handler {
-	return func(ctx context.Context, msg *sarama.ConsumerMessage) (err error) {
+func (h *consumerGroupHandler) withRecover(handler Handler) Handler {
+	return func(ctx context.Context, msg *sarama.ConsumerMessage) error {
 		defer func() {
 			r := recover()
 			if r != nil {
-				err = fmt.Errorf("kafka handler recovered from panic: %s\n stack: %s", r, debug.Stack())
+				h.logger.Err(errors.New("panic")).
+					Ctx(ctx).
+					Str("panic", fmt.Sprintf("%v", r)).
+					Msgf("recovered stack: %s", string(debug.Stack()))
 			}
 		}()
 
-		return h(ctx, msg)
+		return handler(ctx, msg)
+	}
+}
+
+func (h *consumerGroupHandler) withTracing(handler Handler) Handler {
+	if h.tracer == nil {
+		return handler
+	}
+
+	return func(ctx context.Context, msg *sarama.ConsumerMessage) error {
+		ctx, span := h.tracer.Start(ctx, msg.Topic)
+		defer span.End()
+
+		err := handler(ctx, msg)
+		if err != nil {
+			span.SetStatus(otelcodes.Error, err.Error())
+		} else {
+			span.SetStatus(otelcodes.Ok, "succeeded")
+		}
+
+		return err
 	}
 }

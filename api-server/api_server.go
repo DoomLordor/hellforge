@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/rs/zerolog"
 	httpSwagger "github.com/swaggo/http-swagger/v2"
 
 	"github.com/gorilla/mux"
@@ -35,7 +36,7 @@ var (
 )
 
 type APIServer struct {
-	logger *logger.Logger
+	logger zerolog.Logger
 	config *config
 	ready  atomic.Bool
 
@@ -199,7 +200,6 @@ func (s *APIServer) httpSystemStart() {
 	router.Handle("/metrics", metricsHandler).Methods(http.MethodGet)
 	router.HandleFunc("/live", livenessCheckHandler).Methods(http.MethodGet)
 	router.HandleFunc("/ready", s.readinessCheckHandler).Methods(http.MethodGet)
-	router.HandleFunc("/logger", setLogLevel).Methods(http.MethodPost)
 
 	pprofRouter := router.PathPrefix("/debug/pprof").Subrouter()
 	pprofRouter.HandleFunc("/", pprof.Index)

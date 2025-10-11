@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/rs/zerolog"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 
@@ -20,7 +21,7 @@ import (
 )
 
 type middlewares struct {
-	logger  *logger.Logger
+	logger  zerolog.Logger
 	tracer  trace.Tracer
 	metrics *metrics
 	erc     ErrorResponseConstructor

@@ -54,7 +54,12 @@ func WithCallerFrameCount(frameCount int) LoggerOption {
 // WithLevel set log level
 func WithLevel(level string) LoggerOption {
 	return func(logger zerolog.Logger) zerolog.Logger {
-		return logger.Level(ParseLogLevel(level))
+		parsed, err := zerolog.ParseLevel(level)
+		if err != nil {
+			panic(err)
+		}
+
+		return logger.Level(parsed)
 	}
 }
 

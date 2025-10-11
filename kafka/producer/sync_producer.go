@@ -8,15 +8,20 @@ import (
 	"github.com/DoomLordor/hellforge/kafka"
 )
 
+type SyncProducer interface {
+	SendMessage(msg *sarama.ProducerMessage) (partition int32, offset int64, err error)
+	Close() error
+}
+
 // SyncProducer definition
-type SyncProducer struct {
+type syncProducer struct {
 	producer sarama.SyncProducer
 }
 
 // NewSyncProducer sync producer constructor
-func NewSyncProducer(brokers []string, enabled bool, opts ...kafka.Option) (*SyncProducer, error) {
+func NewSyncProducer(brokers []string, enabled bool, opts ...kafka.Option) (SyncProducer, error) {
 	if !enabled {
-		return &SyncProducer{}, nil
+		return &syncProducer{}, nil
 	}
 
 	kafkaCfg := sarama.NewConfig()
@@ -38,11 +43,11 @@ func NewSyncProducer(brokers []string, enabled bool, opts ...kafka.Option) (*Syn
 		return nil, err
 	}
 
-	return &SyncProducer{kafkaProducer}, nil
+	return &syncProducer{kafkaProducer}, nil
 }
 
 // SendMessage produces a given message
-func (p *SyncProducer) SendMessage(msg *sarama.ProducerMessage) (partition int32, offset int64, err error) {
+func (p *syncProducer) SendMessage(msg *sarama.ProducerMessage) (partition int32, offset int64, err error) {
 	if p.producer == nil {
 		return 0, 0, nil
 	}
@@ -51,7 +56,7 @@ func (p *SyncProducer) SendMessage(msg *sarama.ProducerMessage) (partition int32
 }
 
 // Close shuts down the producer
-func (p *SyncProducer) Close() error {
+func (p *syncProducer) Close() error {
 	if p.producer == nil {
 		return nil
 	}

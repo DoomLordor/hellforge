@@ -8,6 +8,7 @@ import (
 
 	govalidator "github.com/bufbuild/protovalidate-go"
 	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/protovalidate"
+	"github.com/rs/zerolog"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	otelcodes "go.opentelemetry.io/otel/codes"
@@ -24,7 +25,7 @@ import (
 )
 
 type interceptors struct {
-	logger *logger.Logger
+	logger zerolog.Logger
 	tracer trace.Tracer
 }
 
