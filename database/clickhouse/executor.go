@@ -4,7 +4,7 @@ import (
 	"context"
 	"strings"
 
-	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
+	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/doug-martin/goqu/v9"
 
 	"go.opentelemetry.io/otel/attribute"
@@ -18,16 +18,16 @@ type SQLConverter interface {
 }
 
 type Executor struct {
-	db          driver.Conn
+	conn        clickhouse.Conn
 	tracer      trace.Tracer
 	withArgs    bool
 	cutQueryLen uint
 	cutArgsLen  uint
 }
 
-func NewExecutor(db driver.Conn, opts ...Option) *Executor {
+func NewExecutor(conn clickhouse.Conn, opts ...Option) *Executor {
 	e := &Executor{
-		db:          db,
+		conn:        conn,
 		tracer:      nil,
 		withArgs:    false,
 		cutQueryLen: defaultCuttingSize,
@@ -58,7 +58,7 @@ func (q *Executor) Scan(ctx context.Context, sq SQLConverter, resp interface{}, 
 		defer span.End()
 	}
 
-	err = scanFunc(ctx, q.db, resp, query, args...)
+	err = scanFunc(ctx, q.conn, resp, query, args...)
 	if span != nil {
 		if err != nil {
 			span.SetStatus(codes.Error, err.Error())
@@ -92,7 +92,7 @@ func (q *Executor) BatchStruct(ctx context.Context, query string, items []any) e
 		defer span.End()
 	}
 
-	batch, err := q.db.PrepareBatch(ctx, query)
+	batch, err := q.conn.PrepareBatch(ctx, query)
 	if err != nil {
 		return err
 	}
