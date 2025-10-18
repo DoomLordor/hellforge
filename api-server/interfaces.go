@@ -7,9 +7,7 @@ import (
 	"google.golang.org/grpc"
 )
 
-type Configurator interface {
-	Configurate(ctx context.Context) ([]Option, error)
-}
+type Configurator func(ctx context.Context) ([]Option, error)
 
 type Grpc interface {
 	RegisterServer(grpcServer *grpc.Server)

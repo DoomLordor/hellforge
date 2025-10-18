@@ -69,7 +69,7 @@ func newConfig() *config {
 			enabled:        true,
 			gatewayEnabled: true,
 			port:           8000,
-			withReflect:    true,
+			withReflect:    false,
 		},
 	}
 }

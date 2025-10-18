@@ -52,7 +52,7 @@ func NewAPIServer(ctx context.Context, configurator Configurator) (*APIServer, e
 		return nil, ConfiguratorNotSetup
 	}
 
-	options, err := configurator.Configurate(ctx)
+	options, err := configurator(ctx)
 	if err != nil {
 		return nil, err
 	}
