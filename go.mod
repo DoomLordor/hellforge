@@ -8,6 +8,7 @@ require (
 	github.com/ClickHouse/clickhouse-go/v2 v2.40.1
 	github.com/IBM/sarama v1.45.2
 	github.com/bufbuild/protovalidate-go v0.9.1
+	github.com/caarlos0/env/v10 v10.0.0
 	github.com/doug-martin/goqu/v9 v9.19.0
 	github.com/georgysavva/scany/v2 v2.1.4
 	github.com/go-co-op/gocron/v2 v2.17.0
@@ -35,6 +36,7 @@ require (
 	cel.dev/expr v0.19.1 // indirect
 	github.com/ClickHouse/ch-go v0.67.0 // indirect
 	github.com/KyleBanks/depth v1.2.1 // indirect
+	github.com/andybalholm/brotli v1.2.0 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
