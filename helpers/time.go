@@ -6,6 +6,14 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+func Now() time.Time {
+	return time.Now().UTC().Truncate(time.Millisecond)
+}
+
+func NowPointer() *time.Time {
+	return ValueToPtr(Now())
+}
+
 // TimePointerToProto converted go *time.Time to proto *timestamp
 func TimePointerToProto(t *time.Time) *timestamppb.Timestamp {
 	if t == nil {
