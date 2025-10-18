@@ -1,4 +1,4 @@
-package configs
+package defaults
 
 import (
 	"github.com/caarlos0/env/v10"

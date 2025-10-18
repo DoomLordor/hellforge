@@ -1,4 +1,4 @@
-package configs
+package defaults
 
 type HttpSystemConfig struct {
 	Enabled bool   `env:"ENABLED" envDefault:"true"`
