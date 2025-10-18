@@ -1,9 +1,8 @@
 package database
 
 import (
-	"fmt"
-
 	"github.com/doug-martin/goqu/v9"
+	"github.com/doug-martin/goqu/v9/exp"
 )
 
 type SelectOption func(qb *goqu.SelectDataset) *goqu.SelectDataset
@@ -21,49 +20,50 @@ func ApplyOptions[R any](qb *goqu.SelectDataset, r *R, opts func(*R) []SelectOpt
 }
 
 func SliceFilter[T any](data []T, fieldName string, alias string) SelectOption {
-	fieldName = GetFieldName(fieldName, alias)
+	column := GetColumn(fieldName, alias)
 	return func(qb *goqu.SelectDataset) *goqu.SelectDataset {
 		if len(data) == 0 {
 			return qb
 		}
 
-		return qb.Where(goqu.Ex{fieldName: data})
+		return qb.Where(column.Eq(data))
 	}
 }
 
 func FieldFilter[T any](value T, fieldName, alias string) SelectOption {
-	fieldName = GetFieldName(fieldName, alias)
+	column := GetColumn(fieldName, alias)
 	return func(qb *goqu.SelectDataset) *goqu.SelectDataset {
-		return qb.Where(goqu.Ex{fieldName: value})
+		return qb.Where(column.Eq(value))
 	}
 }
 
 func OptionalFieldFilter[T any](value *T, fieldName, alias string) SelectOption {
-	fieldName = GetFieldName(fieldName, alias)
+	column := GetColumn(fieldName, alias)
 	return func(qb *goqu.SelectDataset) *goqu.SelectDataset {
 		if value == nil {
 			return qb
 		}
 
-		return qb.Where(goqu.Ex{fieldName: *value})
+		return qb.Where(column.Eq(*value))
 	}
 }
 
 func OptionalFieldFilterWithConverter[T, C any](value *T, fieldName, alias string, converter func(T) C) SelectOption {
-	fieldName = GetFieldName(fieldName, alias)
+	column := GetColumn(fieldName, alias)
 	return func(qb *goqu.SelectDataset) *goqu.SelectDataset {
 		if value == nil {
 			return qb
 		}
 
-		return qb.Where(goqu.Ex{fieldName: converter(*value)})
+		return qb.Where(column.Eq(converter(*value)))
 	}
 }
 
-func GetFieldName(fieldName, alias string) string {
-	if alias == "" {
-		return fieldName
+func GetColumn(fieldName, alias string) exp.IdentifierExpression {
+	column := goqu.C(fieldName)
+	if alias != "" {
+		column = column.Table(alias)
 	}
 
-	return fmt.Sprintf("%s.%s", alias, fieldName)
+	return column
 }
