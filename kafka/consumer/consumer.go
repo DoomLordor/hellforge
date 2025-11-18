@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/IBM/sarama"
+	"github.com/hashicorp/go-multierror"
 	"github.com/rs/zerolog"
 	"go.opentelemetry.io/otel/trace"
 
@@ -23,6 +24,7 @@ type BatchHandler func(ctx context.Context, msgs []*sarama.ConsumerMessage) erro
 type Consumer interface {
 	Run(ctx context.Context, enabled bool, groupID string, topics []string, h Handler) error
 	RunBatch(ctx context.Context, enabled bool, groupID string, topics []string, bh BatchHandler, batchSize int, batchTimeout time.Duration) error
+	Close() error
 }
 
 type consumer struct {
@@ -30,6 +32,8 @@ type consumer struct {
 	tracer       trace.Tracer
 	kafkaBrokers []string
 	config       *sarama.Config
+	closers      []func() error
+	quit         chan struct{}
 }
 
 // NewConsumer constructor for new consumer
@@ -52,6 +56,8 @@ func NewConsumer(name string, kafkaBrokers []string, options ...Option) Consumer
 		tracer:       cfg.tracer,
 		kafkaBrokers: kafkaBrokers,
 		config:       kafkaCfg,
+		closers:      make([]func() error, 0, 5),
+		quit:         make(chan struct{}),
 	}
 }
 
@@ -76,11 +82,15 @@ func (c *consumer) run(ctx context.Context, enabled bool, groupID string, topics
 		return fmt.Errorf("failed to create new consumer group: %w", err)
 	}
 
+	c.closers = append(c.closers, consumerGroup.Close)
+
 	c.logger.Debug().Ctx(ctx).Strs("topics", topics).Msg("Consumer started...")
 	go func() {
 		done := ctx.Done()
 		for {
 			select {
+			case <-c.quit:
+				return
 			case <-done:
 				err = consumerGroup.Close()
 				if err != nil {
@@ -102,4 +112,15 @@ func (c *consumer) run(ctx context.Context, enabled bool, groupID string, topics
 	}()
 
 	return nil
+}
+
+func (c *consumer) Close() error {
+	close(c.quit)
+
+	var multiErr *multierror.Error
+	for _, closer := range c.closers {
+		multiErr = multierror.Append(multiErr, closer())
+	}
+
+	return multiErr.ErrorOrNil()
 }
