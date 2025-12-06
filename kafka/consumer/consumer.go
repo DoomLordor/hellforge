@@ -9,7 +9,6 @@ import (
 	"github.com/IBM/sarama"
 	"github.com/hashicorp/go-multierror"
 	"github.com/rs/zerolog"
-	"go.opentelemetry.io/otel/trace"
 
 	"github.com/DoomLordor/hellforge/logger"
 )
@@ -29,9 +28,9 @@ type Consumer interface {
 
 type consumer struct {
 	logger       zerolog.Logger
-	tracer       trace.Tracer
+	config       *config
 	kafkaBrokers []string
-	config       *sarama.Config
+	kafkaConfig  *sarama.Config
 	closers      []func() error
 	quit         chan struct{}
 }
@@ -43,31 +42,31 @@ func NewConsumer(name string, kafkaBrokers []string, options ...Option) Consumer
 		option(cfg)
 	}
 
-	kafkaCfg := sarama.NewConfig()
-	kafkaCfg.Consumer.Offsets.AutoCommit.Enable = false
-	kafkaCfg.Consumer.Return.Errors = true
+	kafkaConfig := sarama.NewConfig()
+	kafkaConfig.Consumer.Offsets.AutoCommit.Enable = false
+	kafkaConfig.Consumer.Return.Errors = true
 
 	for _, option := range cfg.kafkaOptions {
-		option(kafkaCfg)
+		option(kafkaConfig)
 	}
 
 	return &consumer{
 		logger:       logger.NewLogger("kafka-consumer").With().Str("name", name).Logger(),
-		tracer:       cfg.tracer,
+		config:       cfg,
 		kafkaBrokers: kafkaBrokers,
-		config:       kafkaCfg,
+		kafkaConfig:  kafkaConfig,
 		closers:      make([]func() error, 0, 5),
 		quit:         make(chan struct{}),
 	}
 }
 
 func (c *consumer) Run(ctx context.Context, enabled bool, groupID string, topics []string, h Handler) error {
-	handler := newHandler(c.logger, topics, h, c.tracer)
+	handler := newHandler(c.logger, topics, h, c.config.tracer)
 	return c.run(ctx, enabled, groupID, topics, handler)
 }
 
 func (c *consumer) RunBatch(ctx context.Context, enabled bool, groupID string, topics []string, bh BatchHandler, batchSize int, batchTimeout time.Duration) error {
-	handler := newBatchHandler(c.logger, topics, bh, batchSize, batchTimeout, c.tracer)
+	handler := newBatchHandler(c.logger, topics, bh, batchSize, batchTimeout, c.config.tracer)
 	return c.run(ctx, enabled, groupID, topics, handler)
 }
 
@@ -77,7 +76,7 @@ func (c *consumer) run(ctx context.Context, enabled bool, groupID string, topics
 		return nil
 	}
 
-	consumerGroup, err := sarama.NewConsumerGroup(c.kafkaBrokers, groupID, c.config)
+	consumerGroup, err := sarama.NewConsumerGroup(c.kafkaBrokers, groupID, c.kafkaConfig)
 	if err != nil {
 		return fmt.Errorf("failed to create new consumer group: %w", err)
 	}

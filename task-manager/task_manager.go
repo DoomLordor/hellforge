@@ -10,7 +10,6 @@ import (
 	"github.com/go-co-op/gocron/v2"
 	"github.com/rs/zerolog"
 	otelcodes "go.opentelemetry.io/otel/codes"
-	"go.opentelemetry.io/otel/trace"
 
 	"github.com/DoomLordor/hellforge/logger"
 )
@@ -21,9 +20,8 @@ type TaskManager struct {
 	ctx       context.Context
 	mu        *sync.Mutex
 	logger    zerolog.Logger
-	cfg       *config
+	config    *config
 	scheduler gocron.Scheduler
-	tracer    trace.Tracer
 	tasks     map[string]*task
 }
 
@@ -46,9 +44,8 @@ func NewTaskManager(ctx context.Context, enable bool, options ...Option) (*TaskM
 		ctx:       ctx,
 		mu:        &sync.Mutex{},
 		logger:    logger.NewLogger("task-manager"),
-		cfg:       cfg,
+		config:    cfg,
 		scheduler: scheduler,
-		tracer:    cfg.tracer,
 		tasks:     make(map[string]*task, 10),
 	}, nil
 }
@@ -73,7 +70,7 @@ func (m *TaskManager) AddTask(taskName string, cronSchedule string, worker Worke
 	job, err := m.scheduler.NewJob(
 		gocron.CronJob(t.cronSchedule, true),
 		gocron.NewTask(t.worker),
-		m.cfg.jobOptions...,
+		m.config.jobOptions...,
 	)
 	if err != nil {
 		m.logger.Err(err).Msg("failed to create job")
@@ -129,12 +126,12 @@ func (m *TaskManager) withRecover(worker Worker) Worker {
 }
 
 func (m *TaskManager) withTracing(worker Worker, taskName string) Worker {
-	if m.tracer == nil {
+	if m.config.tracer == nil {
 		return worker
 	}
 
 	return func(ctx context.Context) error {
-		ctx, span := m.tracer.Start(ctx, taskName)
+		ctx, span := m.config.tracer.Start(ctx, taskName)
 		defer span.End()
 
 		err := worker(ctx)

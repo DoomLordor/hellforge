@@ -27,27 +27,21 @@ type SQLConverter interface {
 }
 
 type Executor struct {
-	db          *pgxpool.Pool
-	tracer      trace.Tracer
-	withArgs    bool
-	cutQueryLen uint
-	cutArgsLen  uint
+	conn   *pgxpool.Pool
+	config *config
 }
 
-func NewExecutor(db *pgxpool.Pool, opts ...Option) *Executor {
-	e := &Executor{
-		db:          db,
-		tracer:      nil,
-		withArgs:    false,
-		cutQueryLen: defaultCuttingSize,
-		cutArgsLen:  defaultCuttingSize,
+func NewExecutor(conn *pgxpool.Pool, options ...Option) *Executor {
+	cfg := newConfig()
+
+	for _, option := range options {
+		option(cfg)
 	}
 
-	for _, opt := range opts {
-		opt(e)
+	return &Executor{
+		conn:   conn,
+		config: cfg,
 	}
-
-	return e
 }
 
 // QB sets placeholder format for postgres
@@ -61,7 +55,7 @@ func (q *Executor) runner(ctx context.Context) Runner {
 		return tx
 	}
 
-	return q.db
+	return q.conn
 }
 
 func (q *Executor) Scan(ctx context.Context, sq SQLConverter, resp interface{}, scanFunc ScanFunc) error {
@@ -71,7 +65,7 @@ func (q *Executor) Scan(ctx context.Context, sq SQLConverter, resp interface{}, 
 	}
 
 	var span trace.Span
-	if q.tracer != nil {
+	if q.config.tracer != nil {
 		ctx, span = q.traceQuery(ctx, query, args...)
 		defer span.End()
 	}
@@ -106,7 +100,7 @@ func (q *Executor) Exec(ctx context.Context, sq SQLConverter) error {
 // RunInTransaction runs function f inside db transaction block using specified executor
 func (q *Executor) RunInTransaction(ctx context.Context, f func(ctx context.Context) error) (err error) {
 	var tx pgx.Tx
-	tx, err = q.db.Begin(ctx)
+	tx, err = q.conn.Begin(ctx)
 	if err != nil {
 		return err
 	}
@@ -129,16 +123,16 @@ func (q *Executor) RunInTransaction(ctx context.Context, f func(ctx context.Cont
 
 // returns global tracer with default name (if set) otherwise returns noOp trace provider
 func (q *Executor) traceQuery(ctx context.Context, query string, args ...interface{}) (context.Context, trace.Span) {
-	query = cutString(query, q.cutQueryLen)
+	query = cutString(query, q.config.cutQueryLen)
 
-	ctx, span := q.tracer.Start(ctx, query)
-	if q.withArgs {
+	ctx, span := q.config.tracer.Start(ctx, query)
+	if q.config.withArgs {
 		var cutLen uint
 
-		if q.cutArgsLen == 0 {
+		if q.config.cutArgsLen == 0 {
 			cutLen = uint(len(args))
 		} else {
-			cutLen = min(uint(len(args)), q.cutArgsLen)
+			cutLen = min(uint(len(args)), q.config.cutArgsLen)
 		}
 
 		stringSlice := make([]string, 0, cutLen)
