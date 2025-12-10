@@ -6,18 +6,22 @@ import (
 	"time"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
+	"github.com/nats-io/nats.go"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
+
+	"github.com/DoomLordor/hellforge/nats-gateway/gateway"
 )
 
 type config struct {
-	httpSystem httpSystemConfig
-	http       httpConfig
-	grpc       grpcConfig
-	tracer     trace.Tracer
-	metrics    []prometheus.Collector
-	closers    []func(ctx context.Context) error
+	httpSystem  httpSystemConfig
+	http        httpConfig
+	grpc        grpcConfig
+	natsGateway natsGatewayConfig
+	tracer      trace.Tracer
+	metrics     []prometheus.Collector
+	closers     []func(ctx context.Context) error
 }
 
 type httpSystemConfig struct {
@@ -48,6 +52,14 @@ type grpcConfig struct {
 	streamInterceptors []grpc.StreamServerInterceptor
 	muxOptions         []runtime.ServeMuxOption
 	withReflect        bool
+}
+
+type natsGatewayConfig struct {
+	enabled    bool
+	connect    *nats.Conn
+	subject    string
+	queueGroup string
+	options    []gateway.Option
 }
 
 func newConfig() *config {

@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package hellforge.gateway.v1;
+
+import "google/rpc/status.proto";
+
+option go_package = "github.com/DoomLordor/hellforge/pkg/api/gateway/v1;gateway_v1";
+
+message StringArray {
+  repeated string items = 1;
+}
+
+message NatsGatewayRequest {
+  string method = 1;
+  bytes body = 2;
+  map<string, StringArray> metadata = 3;
+}
+
+message NatsGatewayResponse {
+  bytes body = 1;
+  google.rpc.Status status = 2;
+  map<string, StringArray> metadata = 3;
+}

@@ -1,0 +1,14 @@
+version: v1
+name: buf.build/doomlordor/hellforge
+deps:
+  - buf.build/googleapis/googleapis
+  - buf.build/bufbuild/protovalidate
+breaking:
+  use:
+    - FILE
+lint:
+  use:
+    - DEFAULT
+  ignore:
+    - google/api/annotations.proto
+  allow_comment_ignores: true

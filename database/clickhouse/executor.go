@@ -36,23 +36,23 @@ func NewExecutor(conn clickhouse.Conn, options ...Option) *Executor {
 }
 
 // QB sets placeholder format for postgres
-func (q *Executor) QB(table any) *goqu.SelectDataset {
+func (e *Executor) QB(table any) *goqu.SelectDataset {
 	return goqu.From(table).Prepared(true)
 }
 
-func (q *Executor) Scan(ctx context.Context, sq SQLConverter, resp interface{}, scanFunc ScanFunc) error {
+func (e *Executor) Scan(ctx context.Context, sq SQLConverter, resp interface{}, scanFunc ScanFunc) error {
 	query, args, err := sq.ToSQL()
 	if err != nil {
 		return err
 	}
 
 	var span trace.Span
-	if q.config.tracer != nil {
-		ctx, span = q.traceQuery(ctx, query, args...)
+	if e.config.tracer != nil {
+		ctx, span = e.traceQuery(ctx, query, args...)
 		defer span.End()
 	}
 
-	err = scanFunc(ctx, q.conn, resp, query, args...)
+	err = scanFunc(ctx, e.conn, resp, query, args...)
 	if span != nil {
 		if err != nil {
 			span.SetStatus(codes.Error, err.Error())
@@ -65,28 +65,28 @@ func (q *Executor) Scan(ctx context.Context, sq SQLConverter, resp interface{}, 
 }
 
 // Get query for only one row. If no rows are found it returns a pgx.ErrNoRows error.
-func (q *Executor) Get(ctx context.Context, sq SQLConverter, resp interface{}) error {
-	return q.Scan(ctx, sq, resp, wrapGet)
+func (e *Executor) Get(ctx context.Context, sq SQLConverter, resp interface{}) error {
+	return e.Scan(ctx, sq, resp, wrapGet)
 }
 
 // Select query for many rows. Accept slice as destination resp. If no rows are found - it returns nil error.
-func (q *Executor) Select(ctx context.Context, sq SQLConverter, resp interface{}) error {
-	return q.Scan(ctx, sq, resp, wrapSelect)
+func (e *Executor) Select(ctx context.Context, sq SQLConverter, resp interface{}) error {
+	return e.Scan(ctx, sq, resp, wrapSelect)
 }
 
 // Exec query for no result queries (insert/update/delete without "RETURNING any" suffix)
-func (q *Executor) Exec(ctx context.Context, sq SQLConverter) error {
-	return q.Scan(ctx, sq, nil, wrapExec)
+func (e *Executor) Exec(ctx context.Context, sq SQLConverter) error {
+	return e.Scan(ctx, sq, nil, wrapExec)
 }
 
-func (q *Executor) BatchStruct(ctx context.Context, query string, items []any) error {
+func (e *Executor) BatchStruct(ctx context.Context, query string, items []any) error {
 	var span trace.Span
-	if q.config.tracer != nil {
-		ctx, span = q.traceQuery(ctx, query)
+	if e.config.tracer != nil {
+		ctx, span = e.traceQuery(ctx, query)
 		defer span.End()
 	}
 
-	batch, err := q.conn.PrepareBatch(ctx, query)
+	batch, err := e.conn.PrepareBatch(ctx, query)
 	if err != nil {
 		return err
 	}
@@ -111,17 +111,17 @@ func (q *Executor) BatchStruct(ctx context.Context, query string, items []any) e
 }
 
 // returns global tracer with default name (if set) otherwise returns noOp trace provider
-func (q *Executor) traceQuery(ctx context.Context, query string, args ...interface{}) (context.Context, trace.Span) {
-	query = cutString(query, q.config.cutQueryLen)
+func (e *Executor) traceQuery(ctx context.Context, query string, args ...interface{}) (context.Context, trace.Span) {
+	query = cutString(query, e.config.cutQueryLen)
 
-	ctx, span := q.config.tracer.Start(ctx, query)
-	if q.config.withArgs {
+	ctx, span := e.config.tracer.Start(ctx, query)
+	if e.config.withArgs {
 		var cutLen uint
 
-		if q.config.cutArgsLen == 0 {
+		if e.config.cutArgsLen == 0 {
 			cutLen = uint(len(args))
 		} else {
-			cutLen = min(uint(len(args)), q.config.cutArgsLen)
+			cutLen = min(uint(len(args)), e.config.cutArgsLen)
 		}
 
 		stringSlice := make([]string, 0, cutLen)

@@ -21,6 +21,7 @@ import (
 
 	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/recovery"
 
+	"github.com/DoomLordor/hellforge/helpers"
 	"github.com/DoomLordor/hellforge/logger"
 )
 
@@ -124,7 +125,7 @@ func (i *interceptors) withTracing() grpc.UnaryServerInterceptor {
 		md, ok := metadata.FromIncomingContext(ctx)
 		if ok {
 			// Obtain parent propagator if exists
-			ctx = otel.GetTextMapPropagator().Extract(ctx, metadataCarrier(md))
+			ctx = otel.GetTextMapPropagator().Extract(ctx, helpers.NewMetadataCarrier(md))
 		}
 
 		// Start new parent or child span

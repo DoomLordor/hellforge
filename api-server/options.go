@@ -4,9 +4,12 @@ import (
 	"context"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
+	"github.com/nats-io/nats.go"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
+
+	"github.com/DoomLordor/hellforge/nats-gateway/gateway"
 )
 
 type Option func(c *config)
@@ -92,6 +95,21 @@ func WithGrpcReflection(enabled bool) Option {
 func WithGrpcGateway(enabled bool) Option {
 	return func(c *config) {
 		c.grpc.gatewayEnabled = enabled
+	}
+}
+
+func WithGrpcNatsGateway(connect *nats.Conn, subject, queueGroup string) Option {
+	return func(c *config) {
+		c.natsGateway.enabled = true
+		c.natsGateway.connect = connect
+		c.natsGateway.subject = subject
+		c.natsGateway.queueGroup = queueGroup
+	}
+}
+
+func WithGrpcNatsGatewayOptions(options ...gateway.Option) Option {
+	return func(c *config) {
+		c.natsGateway.options = append(c.natsGateway.options, options...)
 	}
 }
 

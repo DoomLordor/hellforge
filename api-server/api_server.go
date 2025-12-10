@@ -28,6 +28,7 @@ import (
 	"google.golang.org/grpc/reflection"
 
 	"github.com/DoomLordor/hellforge/logger"
+	"github.com/DoomLordor/hellforge/nats-gateway/gateway"
 )
 
 var (
@@ -43,6 +44,7 @@ type APIServer struct {
 	httpSystemServer *http.Server
 	httpServer       *http.Server
 	grpcServer       *grpc.Server
+	natsGateway      gateway.Gateway
 
 	registry *prometheus.Registry
 }
@@ -99,6 +101,12 @@ func (s *APIServer) Start(ctx context.Context) error {
 	err := s.grpcStart()
 	if err != nil {
 		s.logger.Err(err).Msg("grpc start error")
+		return err
+	}
+
+	err = s.natsGatewayStart()
+	if err != nil {
+		s.logger.Err(err).Msg("nats gateway start error")
 		return err
 	}
 
@@ -337,6 +345,55 @@ func (s *APIServer) httpConfigurationSwagger(router *mux.Router) error {
 	return nil
 }
 
+func (s *APIServer) natsGatewayStart() error {
+	if !s.config.grpc.enabled || !s.config.natsGateway.enabled {
+		return nil
+	}
+
+	if s.config.natsGateway.connect == nil {
+		return errors.New("nats gateway connection is required")
+	}
+
+	if len(s.config.natsGateway.subject) == 0 {
+		return errors.New("nats gateway subject is required")
+	}
+
+	if len(s.config.natsGateway.queueGroup) == 0 {
+		return errors.New("nats gateway queue group is required")
+	}
+
+	var adapters []gateway.Adapter
+	for _, implementation := range s.config.grpc.implementations {
+		adapters = append(adapters, implementation.RegisterHandlerNats()...)
+	}
+
+	options := []gateway.Option{
+		gateway.WithAdapters(adapters...),
+	}
+
+	options = append(options, s.config.natsGateway.options...)
+
+	if s.config.tracer != nil {
+		options = append(options, gateway.WithTracer(s.config.tracer))
+	}
+
+	natsGateway, err := gateway.NewGateway(
+		fmt.Sprintf("localhost:%d", s.config.grpc.port),
+		s.config.natsGateway.subject,
+		s.config.natsGateway.queueGroup,
+		s.config.natsGateway.connect,
+		options...,
+	)
+
+	if err != nil {
+		return err
+	}
+
+	s.natsGateway = natsGateway
+
+	return nil
+}
+
 func (s *APIServer) httpConfigurationGateway(ctx context.Context, router *mux.Router) error {
 	if !s.config.grpc.enabled || !s.config.grpc.gatewayEnabled {
 		return nil
@@ -375,7 +432,7 @@ func (s *APIServer) Stop(ctx context.Context) error {
 	ctx, cancel := context.WithTimeout(ctx, time.Second*15)
 	defer cancel()
 
-	errs := make([]error, 0, len(s.config.closers)+2)
+	errs := make([]error, 0, len(s.config.closers)+3)
 	errs = append(errs, s.stop(ctx)...)
 
 	for _, closeFunc := range s.config.closers {
@@ -391,11 +448,19 @@ func (s *APIServer) Stop(ctx context.Context) error {
 }
 
 func (s *APIServer) stop(ctx context.Context) []error {
-	errs := make([]error, 0, 2)
+	errs := make([]error, 0, 3)
 
 	s.ready.Store(false)
 	if s.config.http.enabled {
 		err := s.httpServer.Shutdown(ctx)
+		if err != nil {
+			errs = append(errs, err)
+			s.logger.Err(err).Send()
+		}
+	}
+
+	if s.config.natsGateway.enabled {
+		err := s.natsGateway.Shutdown()
 		if err != nil {
 			errs = append(errs, err)
 			s.logger.Err(err).Send()

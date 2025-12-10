@@ -19,6 +19,8 @@ import (
 type Runner interface {
 	Exec(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error)
 	Query(ctx context.Context, query string, args ...interface{}) (pgx.Rows, error)
+
+	CopyFrom(ctx context.Context, tableName pgx.Identifier, columnNames []string, rowSrc pgx.CopyFromSource) (int64, error)
 }
 
 // SQLConverter query builder to sql with args converter
@@ -45,32 +47,32 @@ func NewExecutor(conn *pgxpool.Pool, options ...Option) *Executor {
 }
 
 // QB sets placeholder format for postgres
-func (q *Executor) QB(table any) *goqu.SelectDataset {
+func (e *Executor) QB(table any) *goqu.SelectDataset {
 	return goqu.From(table).Prepared(true).WithDialect("postgres")
 }
 
-func (q *Executor) runner(ctx context.Context) Runner {
+func (e *Executor) runner(ctx context.Context) Runner {
 	tx, ok := ctx.Value(txRunnerKey{}).(pgx.Tx)
 	if ok {
 		return tx
 	}
 
-	return q.conn
+	return e.conn
 }
 
-func (q *Executor) Scan(ctx context.Context, sq SQLConverter, resp interface{}, scanFunc ScanFunc) error {
+func (e *Executor) Scan(ctx context.Context, sq SQLConverter, resp interface{}, scanFunc ScanFunc) error {
 	query, args, err := sq.ToSQL()
 	if err != nil {
 		return err
 	}
 
 	var span trace.Span
-	if q.config.tracer != nil {
-		ctx, span = q.traceQuery(ctx, query, args...)
+	if e.config.tracer != nil {
+		ctx, span = e.traceQuery(ctx, query, args...)
 		defer span.End()
 	}
 
-	err = scanFunc(ctx, q.runner(ctx), resp, query, args...)
+	err = scanFunc(ctx, e.runner(ctx), resp, query, args...)
 	if span != nil {
 		if err != nil {
 			span.SetStatus(codes.Error, err.Error())
@@ -83,24 +85,35 @@ func (q *Executor) Scan(ctx context.Context, sq SQLConverter, resp interface{}, 
 }
 
 // Get query for only one row. If no rows are found it returns a pgx.ErrNoRows error.
-func (q *Executor) Get(ctx context.Context, sq SQLConverter, resp interface{}) error {
-	return q.Scan(ctx, sq, resp, wrapGet)
+func (e *Executor) Get(ctx context.Context, sq SQLConverter, resp interface{}) error {
+	return e.Scan(ctx, sq, resp, wrapGet)
 }
 
 // Select query for many rows. Accept slice as destination resp. If no rows are found - it returns nil error.
-func (q *Executor) Select(ctx context.Context, sq SQLConverter, resp interface{}) error {
-	return q.Scan(ctx, sq, resp, wrapSelect)
+func (e *Executor) Select(ctx context.Context, sq SQLConverter, resp interface{}) error {
+	return e.Scan(ctx, sq, resp, wrapSelect)
 }
 
 // Exec query for no result queries (insert/update/delete without "RETURNING any" suffix)
-func (q *Executor) Exec(ctx context.Context, sq SQLConverter) error {
-	return q.Scan(ctx, sq, nil, wrapExec)
+func (e *Executor) Exec(ctx context.Context, sq SQLConverter) error {
+	return e.Scan(ctx, sq, nil, wrapExec)
+}
+
+// CopyFrom uses the PostgreSQL copy protocol to perform bulk data insertion. It returns the number of rows copied and
+// an error.
+func (e *Executor) CopyFrom(ctx context.Context, tableName pgx.Identifier, columnNames []string, rowSrc pgx.CopyFromSource) (int64, error) {
+	rowsProcessed, err := e.runner(ctx).CopyFrom(ctx, tableName, columnNames, rowSrc)
+	if err != nil {
+		return 0, err
+	}
+
+	return rowsProcessed, nil
 }
 
 // RunInTransaction runs function f inside db transaction block using specified executor
-func (q *Executor) RunInTransaction(ctx context.Context, f func(ctx context.Context) error) (err error) {
+func (e *Executor) RunInTransaction(ctx context.Context, f func(ctx context.Context) error) (err error) {
 	var tx pgx.Tx
-	tx, err = q.conn.Begin(ctx)
+	tx, err = e.conn.Begin(ctx)
 	if err != nil {
 		return err
 	}
@@ -122,17 +135,17 @@ func (q *Executor) RunInTransaction(ctx context.Context, f func(ctx context.Cont
 }
 
 // returns global tracer with default name (if set) otherwise returns noOp trace provider
-func (q *Executor) traceQuery(ctx context.Context, query string, args ...interface{}) (context.Context, trace.Span) {
-	query = cutString(query, q.config.cutQueryLen)
+func (e *Executor) traceQuery(ctx context.Context, query string, args ...interface{}) (context.Context, trace.Span) {
+	query = cutString(query, e.config.cutQueryLen)
 
-	ctx, span := q.config.tracer.Start(ctx, query)
-	if q.config.withArgs {
+	ctx, span := e.config.tracer.Start(ctx, query)
+	if e.config.withArgs {
 		var cutLen uint
 
-		if q.config.cutArgsLen == 0 {
+		if e.config.cutArgsLen == 0 {
 			cutLen = uint(len(args))
 		} else {
-			cutLen = min(uint(len(args)), q.config.cutArgsLen)
+			cutLen = min(uint(len(args)), e.config.cutArgsLen)
 		}
 
 		stringSlice := make([]string, 0, cutLen)
