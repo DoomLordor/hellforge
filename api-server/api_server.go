@@ -232,7 +232,8 @@ func (s *APIServer) httpSystemStart() {
 
 	go func() {
 		s.logger.Info().Msg("Server system start")
-		if err := s.httpSystemServer.ListenAndServe(); err != nil {
+		err := s.httpSystemServer.ListenAndServe()
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
 			s.logger.Err(err).Send()
 		}
 	}()
@@ -276,8 +277,8 @@ func (s *APIServer) httpStart(ctx context.Context) error {
 	}
 
 	go func() {
-		s.logger.Info().Msg("Server http start")
-		if err := s.httpServer.ListenAndServe(); err != nil {
+		err := s.httpServer.ListenAndServe()
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
 			s.logger.Err(err).Send()
 		}
 	}()

@@ -105,8 +105,7 @@ func (m *middlewares) recoveryMiddleware(next http.Handler) http.Handler {
 			if rc != nil {
 				m.logger.Err(errors.New("panic")).
 					Str("panic", fmt.Sprintf("%v", rc)).
-					Str("stack", string(debug.Stack())).
-					Send()
+					Msg(string(debug.Stack()))
 				w.WriteHeader(http.StatusInternalServerError)
 			}
 		}()
