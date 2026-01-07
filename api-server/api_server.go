@@ -14,10 +14,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/gorilla/mux"
 	"github.com/rs/zerolog"
 	httpSwagger "github.com/swaggo/http-swagger/v2"
 
-	"github.com/gorilla/mux"
 	grpcprom "github.com/grpc-ecosystem/go-grpc-middleware/providers/prometheus"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/prometheus/client_golang/prometheus"

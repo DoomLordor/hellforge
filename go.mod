@@ -20,6 +20,7 @@ require (
 	github.com/nats-io/nats.go v1.47.0
 	github.com/prometheus/client_golang v1.21.1
 	github.com/robfig/cron/v3 v3.0.1
+	github.com/rs/cors v1.11.1
 	github.com/rs/zerolog v1.33.0
 	github.com/swaggo/http-swagger/v2 v2.0.2
 	github.com/xdg-go/scram v1.1.2

@@ -9,10 +9,10 @@ import (
 	"net/http"
 	"runtime/debug"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/rs/cors"
 	"github.com/rs/zerolog"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
@@ -70,10 +70,18 @@ func newMiddlewares(tracer trace.Tracer, erc ErrorResponseConstructor) *middlewa
 }
 
 func (m *middlewares) headersMiddleware(next http.Handler) http.Handler {
-	f := func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, PATCH, DELETE")
-		headers := []string{
+	return cors.New(cors.Options{
+		AllowedOrigins: []string{"*"},
+		AllowedMethods: []string{
+			http.MethodHead,
+			http.MethodGet,
+			http.MethodPost,
+			http.MethodPut,
+			http.MethodPatch,
+			http.MethodDelete,
+			http.MethodOptions,
+		},
+		AllowedHeaders: []string{
 			"Accept",
 			"Content-Type",
 			"Content-Length",
@@ -89,13 +97,9 @@ func (m *middlewares) headersMiddleware(next http.Handler) http.Handler {
 			"Referer",
 			"Cache-Control",
 			"X-header",
-		}
-
-		w.Header().Set("Access-Control-Allow-Headers", strings.Join(headers, ","))
-		next.ServeHTTP(w, r)
-	}
-
-	return http.HandlerFunc(f)
+		},
+		AllowCredentials: false,
+	}).Handler(next)
 }
 
 func (m *middlewares) recoveryMiddleware(next http.Handler) http.Handler {
