@@ -44,7 +44,7 @@ func (c *Logger) Init() {
 	}
 
 	logger.InitLogger(
-		os.Stderr,
+		os.Stdout,
 		logger.WithWriterOptions(writerOptions...),
 		logger.WithLoggerOptions(loggerOptions...),
 	)

@@ -144,7 +144,7 @@ func (g *gateway) handle(ctx context.Context, body []byte) (response *Response) 
 	ctx, cancel := context.WithTimeout(ctx, time.Second*15)
 	defer cancel()
 
-	if len(body) > g.config.limit {
+	if len(body) > g.config.maxMessageSize {
 		return &Response{
 			Status: status.New(codes.Canceled, "message too large"),
 		}

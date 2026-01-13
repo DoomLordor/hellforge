@@ -104,7 +104,7 @@ func (s *APIServer) Start(ctx context.Context) error {
 		return err
 	}
 
-	err = s.natsGatewayStart()
+	err = s.natsGatewayStart(ctx)
 	if err != nil {
 		s.logger.Err(err).Msg("nats gateway start error")
 		return err
@@ -277,6 +277,7 @@ func (s *APIServer) httpStart(ctx context.Context) error {
 	}
 
 	go func() {
+		s.logger.Info().Msg("Server http start")
 		err := s.httpServer.ListenAndServe()
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
 			s.logger.Err(err).Send()
@@ -346,7 +347,7 @@ func (s *APIServer) httpConfigurationSwagger(router *mux.Router) error {
 	return nil
 }
 
-func (s *APIServer) natsGatewayStart() error {
+func (s *APIServer) natsGatewayStart(ctx context.Context) error {
 	if !s.config.grpc.enabled || !s.config.natsGateway.enabled {
 		return nil
 	}
@@ -392,7 +393,7 @@ func (s *APIServer) natsGatewayStart() error {
 
 	s.natsGateway = natsGateway
 
-	return nil
+	return s.natsGateway.Run(ctx)
 }
 
 func (s *APIServer) httpConfigurationGateway(ctx context.Context, router *mux.Router) error {
