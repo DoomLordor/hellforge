@@ -1,6 +1,7 @@
 package postgres
 
 import (
+	"github.com/jackc/pgx/v5/pgxpool"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -9,6 +10,20 @@ type Option func(c *config)
 
 // defaultCuttingSize default span name/attributes len cutting size
 const defaultCuttingSize = 1000
+
+// WithWriteConnects add write connects
+func WithWriteConnects(connects ...*pgxpool.Pool) Option {
+	return func(c *config) {
+		c.writeConnects = append(c.writeConnects, connects...)
+	}
+}
+
+// WithReadConnects add read connects
+func WithReadConnects(connects ...*pgxpool.Pool) Option {
+	return func(c *config) {
+		c.readConnects = append(c.readConnects, connects...)
+	}
+}
 
 // WithTracing enable tracing with arguments with default query/args len cutting
 func WithTracing(tracer trace.Tracer) Option {

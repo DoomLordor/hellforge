@@ -2,131 +2,104 @@ package clickhouse
 
 import (
 	"context"
+	"errors"
 	"strings"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/doug-martin/goqu/v9"
-
 	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
+
+	"github.com/DoomLordor/hellforge/helpers"
 )
 
-// SQLConverter query builder to sql with args converter (accept any squirrel builder interface)
-type SQLConverter interface {
-	ToSQL() (string, []interface{}, error)
+type Executor interface {
+	QB(table any) *goqu.SelectDataset
+	Write(ctx context.Context) Querier
+	Read(ctx context.Context) Querier
 }
 
-type Executor struct {
-	conn   clickhouse.Conn
-	config *config
+type executor struct {
+	writeConnects helpers.RoundRobin[clickhouse.Conn]
+	readConnects  helpers.RoundRobin[clickhouse.Conn]
+	tracer        trace.Tracer
+	withArgs      bool
+	cutQueryLen   uint
+	cutArgsLen    uint
 }
 
-func NewExecutor(conn clickhouse.Conn, options ...Option) *Executor {
+func NewExecutor(options ...Option) (Executor, error) {
 	cfg := newConfig()
 
 	for _, option := range options {
 		option(cfg)
 	}
 
-	return &Executor{
-		conn:   conn,
-		config: cfg,
+	if len(cfg.writeConnects) == 0 {
+		return nil, errors.New("must provide at least one connection")
 	}
+
+	writeRobin := helpers.NewRoundRobin(cfg.writeConnects)
+	var readRobin helpers.RoundRobin[clickhouse.Conn]
+	if len(cfg.readConnects) == 0 {
+		readRobin = writeRobin
+	}
+
+	return &executor{
+		writeConnects: writeRobin,
+		readConnects:  readRobin,
+		tracer:        cfg.tracer,
+		withArgs:      cfg.withArgs,
+		cutQueryLen:   cfg.cutQueryLen,
+		cutArgsLen:    cfg.cutArgsLen,
+	}, nil
 }
 
 // QB sets placeholder format for postgres
-func (e *Executor) QB(table any) *goqu.SelectDataset {
+func (e *executor) QB(table any) *goqu.SelectDataset {
 	return goqu.From(table).Prepared(true)
 }
 
-func (e *Executor) Scan(ctx context.Context, sq SQLConverter, resp interface{}, scanFunc ScanFunc) error {
-	query, args, err := sq.ToSQL()
-	if err != nil {
-		return err
+func (e *executor) getQuerier(ctx context.Context, connects helpers.RoundRobin[clickhouse.Conn]) Querier {
+	q := &querier{
+		ctx:    ctx,
+		runner: connects.Next(),
 	}
 
-	var span trace.Span
-	if e.config.tracer != nil {
-		ctx, span = e.traceQuery(ctx, query, args...)
-		defer span.End()
+	if e.tracer != nil {
+		q.tracer = e
 	}
 
-	err = scanFunc(ctx, e.conn, resp, query, args...)
-	if span != nil {
-		if err != nil {
-			span.SetStatus(codes.Error, err.Error())
-		} else {
-			span.SetStatus(codes.Ok, "succeeded")
-		}
-	}
-
-	return err
+	return q
 }
 
-// Get query for only one row. If no rows are found it returns a pgx.ErrNoRows error.
-func (e *Executor) Get(ctx context.Context, sq SQLConverter, resp interface{}) error {
-	return e.Scan(ctx, sq, resp, wrapGet)
+// Write get Querier for write query
+func (e *executor) Write(ctx context.Context) Querier {
+	return e.getQuerier(ctx, e.writeConnects)
 }
 
-// Select query for many rows. Accept slice as destination resp. If no rows are found - it returns nil error.
-func (e *Executor) Select(ctx context.Context, sq SQLConverter, resp interface{}) error {
-	return e.Scan(ctx, sq, resp, wrapSelect)
+// Read get Querier for read query
+func (e *executor) Read(ctx context.Context) Querier {
+	return e.getQuerier(ctx, e.readConnects)
 }
 
-// Exec query for no result queries (insert/update/delete without "RETURNING any" suffix)
-func (e *Executor) Exec(ctx context.Context, sq SQLConverter) error {
-	return e.Scan(ctx, sq, nil, wrapExec)
-}
+// traceQuery returns global tracer with default name (if set) otherwise returns noOp trace provider
+func (e *executor) traceQuery(ctx context.Context, query string, args ...interface{}) (context.Context, trace.Span) {
+	query = helpers.CutString(query, e.cutQueryLen)
 
-func (e *Executor) BatchStruct(ctx context.Context, query string, items []any) error {
-	var span trace.Span
-	if e.config.tracer != nil {
-		ctx, span = e.traceQuery(ctx, query)
-		defer span.End()
-	}
-
-	batch, err := e.conn.PrepareBatch(ctx, query)
-	if err != nil {
-		return err
-	}
-
-	for _, arg := range items {
-		err = batch.AppendStruct(arg)
-		if err != nil {
-			return err
-		}
-	}
-
-	err = batch.Send()
-	if span != nil {
-		if err != nil {
-			span.SetStatus(codes.Error, err.Error())
-		} else {
-			span.SetStatus(codes.Ok, "succeeded")
-		}
-	}
-
-	return err
-}
-
-// returns global tracer with default name (if set) otherwise returns noOp trace provider
-func (e *Executor) traceQuery(ctx context.Context, query string, args ...interface{}) (context.Context, trace.Span) {
-	query = cutString(query, e.config.cutQueryLen)
-
-	ctx, span := e.config.tracer.Start(ctx, query)
-	if e.config.withArgs {
+	ctx, span := e.tracer.Start(ctx, query)
+	if e.withArgs {
 		var cutLen uint
 
-		if e.config.cutArgsLen == 0 {
+		if e.cutArgsLen == 0 {
 			cutLen = uint(len(args))
 		} else {
-			cutLen = min(uint(len(args)), e.config.cutArgsLen)
+			cutLen = min(uint(len(args)), e.cutArgsLen)
 		}
 
 		stringSlice := make([]string, 0, cutLen)
 		for _, v := range args[:cutLen] {
-			stringSlice = append(stringSlice, defineString(v))
+			stringSlice = append(stringSlice, helpers.DefineString(v))
 		}
 
 		span.SetAttributes(attribute.String("args", strings.Join(stringSlice, ",")))

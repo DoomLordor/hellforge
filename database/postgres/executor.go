@@ -2,118 +2,101 @@ package postgres
 
 import (
 	"context"
+	"errors"
 	"strings"
 
 	"github.com/doug-martin/goqu/v9"
 	_ "github.com/doug-martin/goqu/v9/dialect/postgres"
-	"github.com/jackc/pgx/v5/pgconn"
-	"go.opentelemetry.io/otel/codes"
-
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
+
+	"github.com/DoomLordor/hellforge/helpers"
 )
 
-type Runner interface {
-	Exec(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error)
-	Query(ctx context.Context, query string, args ...interface{}) (pgx.Rows, error)
-
-	CopyFrom(ctx context.Context, tableName pgx.Identifier, columnNames []string, rowSrc pgx.CopyFromSource) (int64, error)
+type Executor interface {
+	QB(table any) *goqu.SelectDataset
+	Write(ctx context.Context) Querier
+	Read(ctx context.Context) Querier
+	RunInTransaction(ctx context.Context, f func(ctx context.Context) error) (err error)
 }
 
-// SQLConverter query builder to sql with args converter
-type SQLConverter interface {
-	ToSQL() (string, []interface{}, error)
+type executor struct {
+	writeConnects helpers.RoundRobin[*pgxpool.Pool]
+	readConnects  helpers.RoundRobin[*pgxpool.Pool]
+	tracer        trace.Tracer
+	withArgs      bool
+	cutQueryLen   uint
+	cutArgsLen    uint
 }
 
-type Executor struct {
-	conn   *pgxpool.Pool
-	config *config
-}
-
-func NewExecutor(conn *pgxpool.Pool, options ...Option) *Executor {
+func NewExecutor(options ...Option) (Executor, error) {
 	cfg := newConfig()
 
 	for _, option := range options {
 		option(cfg)
 	}
 
-	return &Executor{
-		conn:   conn,
-		config: cfg,
+	if len(cfg.writeConnects) == 0 {
+		return nil, errors.New("must provide at least one connection")
 	}
+
+	writeRobin := helpers.NewRoundRobin(cfg.writeConnects)
+	var readRobin helpers.RoundRobin[*pgxpool.Pool]
+	if len(cfg.readConnects) == 0 {
+		readRobin = writeRobin
+	}
+
+	return &executor{
+		writeConnects: writeRobin,
+		readConnects:  readRobin,
+		tracer:        cfg.tracer,
+		withArgs:      cfg.withArgs,
+		cutQueryLen:   cfg.cutQueryLen,
+		cutArgsLen:    cfg.cutArgsLen,
+	}, nil
 }
 
 // QB sets placeholder format for postgres
-func (e *Executor) QB(table any) *goqu.SelectDataset {
+func (e *executor) QB(table any) *goqu.SelectDataset {
 	return goqu.From(table).Prepared(true).WithDialect("postgres")
 }
 
-func (e *Executor) runner(ctx context.Context) Runner {
+func (e *executor) getQuerier(ctx context.Context, connects helpers.RoundRobin[*pgxpool.Pool]) Querier {
+	q := &querier{
+		ctx: ctx,
+	}
+
+	if e.tracer != nil {
+		q.tracer = e
+	}
+
 	tx, ok := ctx.Value(txRunnerKey{}).(pgx.Tx)
 	if ok {
-		return tx
+		q.runner = tx
+	} else {
+		q.runner = connects.Next()
 	}
 
-	return e.conn
+	return q
 }
 
-func (e *Executor) Scan(ctx context.Context, sq SQLConverter, resp interface{}, scanFunc ScanFunc) error {
-	query, args, err := sq.ToSQL()
-	if err != nil {
-		return err
-	}
-
-	var span trace.Span
-	if e.config.tracer != nil {
-		ctx, span = e.traceQuery(ctx, query, args...)
-		defer span.End()
-	}
-
-	err = scanFunc(ctx, e.runner(ctx), resp, query, args...)
-	if span != nil {
-		if err != nil {
-			span.SetStatus(codes.Error, err.Error())
-		} else {
-			span.SetStatus(codes.Ok, "succeeded")
-		}
-	}
-
-	return err
+// Write get Querier for write query
+func (e *executor) Write(ctx context.Context) Querier {
+	return e.getQuerier(ctx, e.writeConnects)
 }
 
-// Get query for only one row. If no rows are found it returns a pgx.ErrNoRows error.
-func (e *Executor) Get(ctx context.Context, sq SQLConverter, resp interface{}) error {
-	return e.Scan(ctx, sq, resp, wrapGet)
-}
-
-// Select query for many rows. Accept slice as destination resp. If no rows are found - it returns nil error.
-func (e *Executor) Select(ctx context.Context, sq SQLConverter, resp interface{}) error {
-	return e.Scan(ctx, sq, resp, wrapSelect)
-}
-
-// Exec query for no result queries (insert/update/delete without "RETURNING any" suffix)
-func (e *Executor) Exec(ctx context.Context, sq SQLConverter) error {
-	return e.Scan(ctx, sq, nil, wrapExec)
-}
-
-// CopyFrom uses the PostgreSQL copy protocol to perform bulk data insertion. It returns the number of rows copied and
-// an error.
-func (e *Executor) CopyFrom(ctx context.Context, tableName pgx.Identifier, columnNames []string, rowSrc pgx.CopyFromSource) (int64, error) {
-	rowsProcessed, err := e.runner(ctx).CopyFrom(ctx, tableName, columnNames, rowSrc)
-	if err != nil {
-		return 0, err
-	}
-
-	return rowsProcessed, nil
+// Read get Querier for read query
+func (e *executor) Read(ctx context.Context) Querier {
+	return e.getQuerier(ctx, e.readConnects)
 }
 
 // RunInTransaction runs function f inside db transaction block using specified executor
-func (e *Executor) RunInTransaction(ctx context.Context, f func(ctx context.Context) error) (err error) {
+func (e *executor) RunInTransaction(ctx context.Context, f func(ctx context.Context) error) (err error) {
 	var tx pgx.Tx
-	tx, err = e.conn.Begin(ctx)
+	tx, err = e.writeConnects.Next().Begin(ctx)
 	if err != nil {
 		return err
 	}
@@ -134,23 +117,23 @@ func (e *Executor) RunInTransaction(ctx context.Context, f func(ctx context.Cont
 	return tx.Commit(ctx)
 }
 
-// returns global tracer with default name (if set) otherwise returns noOp trace provider
-func (e *Executor) traceQuery(ctx context.Context, query string, args ...interface{}) (context.Context, trace.Span) {
-	query = cutString(query, e.config.cutQueryLen)
+// traceQuery returns global tracer with default name (if set) otherwise returns noOp trace provider
+func (e *executor) traceQuery(ctx context.Context, query string, args ...any) (context.Context, trace.Span) {
+	query = helpers.CutString(query, e.cutQueryLen)
 
-	ctx, span := e.config.tracer.Start(ctx, query)
-	if e.config.withArgs {
+	ctx, span := e.tracer.Start(ctx, query)
+	if e.withArgs {
 		var cutLen uint
 
-		if e.config.cutArgsLen == 0 {
+		if e.cutArgsLen == 0 {
 			cutLen = uint(len(args))
 		} else {
-			cutLen = min(uint(len(args)), e.config.cutArgsLen)
+			cutLen = min(uint(len(args)), e.cutArgsLen)
 		}
 
 		stringSlice := make([]string, 0, cutLen)
 		for _, v := range args[:cutLen] {
-			stringSlice = append(stringSlice, defineString(v))
+			stringSlice = append(stringSlice, helpers.DefineString(v))
 		}
 
 		span.SetAttributes(attribute.String("args", strings.Join(stringSlice, ",")))
