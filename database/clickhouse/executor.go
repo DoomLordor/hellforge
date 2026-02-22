@@ -2,108 +2,75 @@ package clickhouse
 
 import (
 	"context"
-	"errors"
-	"strings"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
-	"github.com/doug-martin/goqu/v9"
-	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
-
-	"github.com/DoomLordor/hellforge/helpers"
 )
 
 type Executor interface {
-	QB(table any) *goqu.SelectDataset
-	Write(ctx context.Context) Querier
-	Read(ctx context.Context) Querier
+	RunRaw(query string, args []any, resp any, scanFunc ScanFunc) error
+	Run(sq SQLConverter, resp any, scanFunc ScanFunc) error
+	Get(sq SQLConverter, resp any) error
+	Select(sq SQLConverter, resp any) error
+	Exec(sq SQLConverter) error
+	BatchStruct(query string, items []any) error
 }
 
 type executor struct {
-	writeConnects helpers.RoundRobin[clickhouse.Conn]
-	readConnects  helpers.RoundRobin[clickhouse.Conn]
-	tracer        trace.Tracer
-	withArgs      bool
-	cutQueryLen   uint
-	cutArgsLen    uint
+	ctx    context.Context
+	tracer tracer
+	runner clickhouse.Conn
 }
 
-func NewExecutor(options ...Option) (Executor, error) {
-	cfg := newConfig()
-
-	for _, option := range options {
-		option(cfg)
-	}
-
-	if len(cfg.writeConnects) == 0 {
-		return nil, errors.New("must provide at least one connection")
-	}
-
-	writeRobin := helpers.NewRoundRobin(cfg.writeConnects)
-	var readRobin helpers.RoundRobin[clickhouse.Conn]
-	if len(cfg.readConnects) == 0 {
-		readRobin = writeRobin
-	}
-
-	return &executor{
-		writeConnects: writeRobin,
-		readConnects:  readRobin,
-		tracer:        cfg.tracer,
-		withArgs:      cfg.withArgs,
-		cutQueryLen:   cfg.cutQueryLen,
-		cutArgsLen:    cfg.cutArgsLen,
-	}, nil
-}
-
-// QB sets placeholder format for postgres
-func (e *executor) QB(table any) *goqu.SelectDataset {
-	return goqu.From(table).Prepared(true)
-}
-
-func (e *executor) getQuerier(ctx context.Context, connects helpers.RoundRobin[clickhouse.Conn]) Querier {
-	q := &querier{
-		ctx:    ctx,
-		runner: connects.Next(),
-	}
-
+func (e *executor) RunRaw(query string, args []any, resp any, scanFunc ScanFunc) error {
+	var span trace.Span
 	if e.tracer != nil {
-		q.tracer = e
+		e.ctx, span = e.tracer.traceQuery(e.ctx, query, args...)
+		defer span.End()
 	}
 
-	return q
-}
-
-// Write get Querier for write query
-func (e *executor) Write(ctx context.Context) Querier {
-	return e.getQuerier(ctx, e.writeConnects)
-}
-
-// Read get Querier for read query
-func (e *executor) Read(ctx context.Context) Querier {
-	return e.getQuerier(ctx, e.readConnects)
-}
-
-// traceQuery returns global tracer with default name (if set) otherwise returns noOp trace provider
-func (e *executor) traceQuery(ctx context.Context, query string, args ...interface{}) (context.Context, trace.Span) {
-	query = helpers.CutString(query, e.cutQueryLen)
-
-	ctx, span := e.tracer.Start(ctx, query)
-	if e.withArgs {
-		var cutLen uint
-
-		if e.cutArgsLen == 0 {
-			cutLen = uint(len(args))
+	err := scanFunc(e.ctx, e.runner, resp, query, args...)
+	if span != nil {
+		if err != nil {
+			span.SetStatus(codes.Error, err.Error())
 		} else {
-			cutLen = min(uint(len(args)), e.cutArgsLen)
+			span.SetStatus(codes.Ok, "succeeded")
 		}
-
-		stringSlice := make([]string, 0, cutLen)
-		for _, v := range args[:cutLen] {
-			stringSlice = append(stringSlice, helpers.DefineString(v))
-		}
-
-		span.SetAttributes(attribute.String("args", strings.Join(stringSlice, ",")))
 	}
 
-	return ctx, span
+	return err
+}
+
+func (e *executor) Run(sq SQLConverter, resp any, scanFunc ScanFunc) error {
+	query, args, err := sq.ToSQL()
+	if err != nil {
+		return err
+	}
+
+	return e.RunRaw(query, args, resp, scanFunc)
+}
+
+// Get query for only one row. If no rows are found it returns a pgx.ErrNoRows error.
+func (e *executor) Get(sq SQLConverter, resp any) error {
+	return e.Run(sq, resp, wrapGet)
+}
+
+// Select query for many rows. Accept slice as destination resp. If no rows are found - it returns nil error.
+func (e *executor) Select(sq SQLConverter, resp any) error {
+	return e.Run(sq, resp, wrapSelect)
+}
+
+// Exec query for no result queries (insert/update/delete without "RETURNING any" suffix)
+func (e *executor) Exec(sq SQLConverter) error {
+	return e.Run(sq, nil, wrapExec)
+}
+
+// ExecRaw raw query for no result queries (insert/update/delete without "RETURNING any" suffix)
+func (e *executor) ExecRaw(query string, args ...any) error {
+	return e.RunRaw(query, args, nil, wrapExec)
+}
+
+func (e *executor) BatchStruct(query string, items []any) error {
+	return e.RunRaw(query, items, nil, wrapBatch)
 }

@@ -22,6 +22,11 @@ func NewRoundRobin[T any](values []T) RoundRobin[T] {
 }
 
 func (r *roundRobin[T]) Next() T {
+	if len(r.values) == 0 {
+		var res T
+		return res
+	}
+
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	value := r.values[r.index]
