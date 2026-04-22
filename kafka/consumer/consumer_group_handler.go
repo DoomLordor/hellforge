@@ -91,9 +91,10 @@ func (h *consumerGroupHandler) withTracing(handler Handler) Handler {
 
 		err := handler(ctx, msg)
 		if err != nil {
+			span.RecordError(err)
 			span.SetStatus(otelcodes.Error, err.Error())
 		} else {
-			span.SetStatus(otelcodes.Ok, "succeeded")
+			span.SetStatus(otelcodes.Ok, "success")
 		}
 
 		return err

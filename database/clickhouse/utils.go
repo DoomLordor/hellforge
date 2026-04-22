@@ -6,7 +6,7 @@ import (
 	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
 )
 
-type ScanFunc func(ctx context.Context, c driver.Conn, dst any, query string, args ...any) error
+type RunFunc func(ctx context.Context, c driver.Conn, dst any, query string, args ...any) error
 
 func wrapGet(ctx context.Context, c driver.Conn, dst any, query string, args ...any) error {
 	return c.QueryRow(ctx, query, args...).Scan(dst)

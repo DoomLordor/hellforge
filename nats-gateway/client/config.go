@@ -7,7 +7,7 @@ import (
 )
 
 type config struct {
-	tracer         trace.Tracer
+	provider       trace.TracerProvider
 	timeout        time.Duration
 	maxMessageSize int
 }

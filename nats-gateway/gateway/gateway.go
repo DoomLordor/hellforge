@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"runtime/debug"
 	"sync"
-	"time"
 
 	"github.com/hashicorp/go-multierror"
 	"github.com/nats-io/nats.go"
@@ -40,6 +39,7 @@ type gateway struct {
 	queueGroup    string
 	natsConn      *nats.Conn
 	grpcConn      *grpc.ClientConn
+	tracer        trace.Tracer
 	config        *config
 	adapterMap    map[string]Adapter
 	wg            sync.WaitGroup
@@ -48,9 +48,8 @@ type gateway struct {
 
 func NewGateway(grpcAddr, subject, queueGroup string, natsConn *nats.Conn, options ...Option) (Gateway, error) {
 	cfg := newConfig()
-
-	for _, opt := range options {
-		opt(cfg)
+	for _, option := range options {
+		option(cfg)
 	}
 
 	dialOpts := []grpc.DialOption{
@@ -66,11 +65,12 @@ func NewGateway(grpcAddr, subject, queueGroup string, natsConn *nats.Conn, optio
 	}
 
 	return &gateway{
-		logger:        logger.NewLogger("gateway-nats"),
+		logger:        logger.NewLogger("nats-gateway"),
 		subject:       subject,
 		queueGroup:    queueGroup,
 		natsConn:      natsConn,
 		grpcConn:      grpcConn,
+		tracer:        helpers.ProviderToTracer(cfg.provider, "nats-gateway"),
 		config:        cfg,
 		adapterMap:    cfg.getAdaptersMap(),
 		wg:            sync.WaitGroup{},
@@ -141,7 +141,7 @@ func (g *gateway) handle(ctx context.Context, body []byte) (response *Response) 
 		}
 	}()
 
-	ctx, cancel := context.WithTimeout(ctx, time.Second*15)
+	ctx, cancel := context.WithTimeout(ctx, g.config.handleTimeout)
 	defer cancel()
 
 	if len(body) > g.config.maxMessageSize {
@@ -162,14 +162,15 @@ func (g *gateway) handle(ctx context.Context, body []byte) (response *Response) 
 	md := natsgateway.ConvertMetadataFromProto(request.Metadata)
 	ctx = metadata.NewOutgoingContext(ctx, md)
 	ctx = otel.GetTextMapPropagator().Extract(ctx, helpers.NewMetadataCarrier(md))
-	if g.config.tracer != nil {
+	if g.tracer != nil {
 		var span trace.Span
-		ctx, span = g.config.tracer.Start(ctx, "call-consumer")
+		ctx, span = g.tracer.Start(ctx, "call-consumer")
 		span.SetAttributes(attribute.String("method", request.Method))
 		defer func() {
 			if response.Status == nil {
 				span.SetStatus(otelcodes.Ok, "success")
 			} else {
+				span.RecordError(err)
 				span.SetStatus(otelcodes.Error, response.Status.Err().Error())
 			}
 

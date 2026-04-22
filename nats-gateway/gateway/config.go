@@ -2,23 +2,26 @@ package gateway
 
 import (
 	"runtime"
+	"time"
 
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
 )
 
 type config struct {
-	tracer         trace.Tracer
+	provider       trace.TracerProvider
 	adapters       []Adapter
 	dialOpts       []grpc.DialOption
 	limit          int
 	maxMessageSize int
+	handleTimeout  time.Duration
 }
 
 func newConfig() *config {
 	return &config{
 		limit:          runtime.NumCPU(),
 		maxMessageSize: 1024 * 1024 * 10,
+		handleTimeout:  time.Second * 60,
 	}
 }
 

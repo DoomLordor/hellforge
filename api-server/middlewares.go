@@ -130,9 +130,10 @@ func (m *middlewares) tracingMiddleware(hf HandlerApiFunc) HandlerApiFunc {
 
 		res, code, err := hf(r.WithContext(ctx))
 		if err != nil {
+			span.RecordError(err)
 			span.SetStatus(codes.Error, err.Error())
 		} else {
-			span.SetStatus(codes.Ok, "succeeded")
+			span.SetStatus(codes.Ok, "success")
 		}
 
 		return res, code, err

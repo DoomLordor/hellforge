@@ -10,7 +10,9 @@ import (
 	"github.com/go-co-op/gocron/v2"
 	"github.com/rs/zerolog"
 	otelcodes "go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 
+	"github.com/DoomLordor/hellforge/helpers"
 	"github.com/DoomLordor/hellforge/logger"
 )
 
@@ -20,6 +22,7 @@ type TaskManager struct {
 	ctx       context.Context
 	mu        *sync.Mutex
 	logger    zerolog.Logger
+	tracer    trace.Tracer
 	config    *config
 	scheduler gocron.Scheduler
 	tasks     map[string]*task
@@ -44,6 +47,7 @@ func NewTaskManager(ctx context.Context, enable bool, options ...Option) (*TaskM
 		ctx:       ctx,
 		mu:        &sync.Mutex{},
 		logger:    logger.NewLogger("task-manager"),
+		tracer:    helpers.ProviderToTracer(cfg.provider, "task-manager"),
 		config:    cfg,
 		scheduler: scheduler,
 		tasks:     make(map[string]*task, 10),
@@ -126,19 +130,20 @@ func (m *TaskManager) withRecover(worker Worker) Worker {
 }
 
 func (m *TaskManager) withTracing(worker Worker, taskName string) Worker {
-	if m.config.tracer == nil {
+	if m.tracer == nil {
 		return worker
 	}
 
 	return func(ctx context.Context) error {
-		ctx, span := m.config.tracer.Start(ctx, taskName)
+		ctx, span := m.tracer.Start(ctx, taskName, trace.WithSpanKind(trace.SpanKindInternal))
 		defer span.End()
 
 		err := worker(ctx)
 		if err != nil {
+			span.RecordError(err)
 			span.SetStatus(otelcodes.Error, err.Error())
 		} else {
-			span.SetStatus(otelcodes.Ok, "succeeded")
+			span.SetStatus(otelcodes.Ok, "success")
 		}
 
 		return err

@@ -6,7 +6,7 @@ import (
 )
 
 type config struct {
-	tracer           trace.Tracer
+	provider         trace.TracerProvider
 	schedulerOptions []gocron.SchedulerOption
 	jobOptions       []gocron.JobOption
 }

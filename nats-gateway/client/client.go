@@ -32,6 +32,7 @@ type client struct {
 	logger   zerolog.Logger
 	subject  string
 	natsConn *nats.Conn
+	tracer   trace.Tracer
 	config   *config
 }
 
@@ -45,6 +46,7 @@ func NewClient(subject string, natsConn *nats.Conn, options ...Option) Client {
 		logger:   logger.NewLogger("nats-client"),
 		subject:  subject,
 		natsConn: natsConn,
+		tracer:   helpers.ProviderToTracer(cfg.provider, "nats-client"),
 		config:   cfg,
 	}
 }
@@ -52,11 +54,12 @@ func NewClient(subject string, natsConn *nats.Conn, options ...Option) Client {
 func (c *client) Invoke(ctx context.Context, method string, args, reply any, _ ...grpc.CallOption) (err error) {
 	start := time.Now()
 	var span trace.Span
-	if c.config.tracer != nil {
-		ctx, span = c.config.tracer.Start(ctx, "nats-client-invoke")
+	if c.tracer != nil {
+		ctx, span = c.tracer.Start(ctx, "nats-client-invoke")
 		span.SetAttributes(attribute.String("method", method))
 		defer func() {
 			if err != nil {
+				span.RecordError(err)
 				span.SetStatus(otelcodes.Error, err.Error())
 			} else {
 				span.SetStatus(otelcodes.Ok, "success")

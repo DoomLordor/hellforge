@@ -15,24 +15,23 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
-	"github.com/rs/zerolog"
-	httpSwagger "github.com/swaggo/http-swagger/v2"
-
 	grpcprom "github.com/grpc-ecosystem/go-grpc-middleware/providers/prometheus"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/rs/zerolog"
+	httpSwagger "github.com/swaggo/http-swagger/v2"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/reflection"
 
+	"github.com/DoomLordor/hellforge/helpers"
 	"github.com/DoomLordor/hellforge/logger"
 	"github.com/DoomLordor/hellforge/nats-gateway/gateway"
 )
 
 var (
-	ConfiguratorNotSetup    = errors.New("configurator not setup")
 	FailedToRegisterGateway = errors.New("failed to register gateway")
 )
 
@@ -50,10 +49,6 @@ type APIServer struct {
 }
 
 func NewAPIServer(ctx context.Context, configurator Configurator) (*APIServer, error) {
-	if configurator == nil {
-		return nil, ConfiguratorNotSetup
-	}
-
 	options, err := configurator(ctx)
 	if err != nil {
 		return nil, err
@@ -134,7 +129,7 @@ func (s *APIServer) grpcStart() error {
 	metricsCollector := grpcprom.NewServerMetrics(grpcprom.WithServerHandlingTimeHistogram())
 	s.registry.MustRegister(metricsCollector)
 
-	systemInterceptors := newInterceptors(s.config.tracer)
+	systemInterceptors := newInterceptors(helpers.ProviderToTracer(s.config.provider, "grpc-server"))
 	unaryValidator, err := systemInterceptors.withUnaryValidation()
 	if err != nil {
 		return err
@@ -244,7 +239,7 @@ func (s *APIServer) httpStart(ctx context.Context) error {
 		return nil
 	}
 
-	m := newMiddlewares(s.config.tracer, s.config.http.erc)
+	m := newMiddlewares(helpers.ProviderToTracer(s.config.provider, "http-server"), s.config.http.erc)
 	s.registry.MustRegister(
 		m.metrics.requestCount,
 		m.metrics.responseCount,
@@ -371,13 +366,10 @@ func (s *APIServer) natsGatewayStart(ctx context.Context) error {
 
 	options := []gateway.Option{
 		gateway.WithAdapters(adapters...),
+		gateway.WithTracing(s.config.provider),
 	}
 
 	options = append(options, s.config.natsGateway.options...)
-
-	if s.config.tracer != nil {
-		options = append(options, gateway.WithTracer(s.config.tracer))
-	}
 
 	natsGateway, err := gateway.NewGateway(
 		fmt.Sprintf("localhost:%d", s.config.grpc.port),

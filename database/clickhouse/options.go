@@ -26,9 +26,9 @@ func WithReadConnects(connects ...clickhouse.Conn) Option {
 }
 
 // WithTracing enable tracing with arguments with default query/args len cutting
-func WithTracing(tracer trace.Tracer) Option {
+func WithTracing(provider trace.TracerProvider) Option {
 	return func(c *config) {
-		c.tracer = tracer
+		c.provider = provider
 	}
 }
 

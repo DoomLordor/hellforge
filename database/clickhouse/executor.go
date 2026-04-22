@@ -9,11 +9,12 @@ import (
 )
 
 type Executor interface {
-	RunRaw(query string, args []any, resp any, scanFunc ScanFunc) error
-	Run(sq SQLConverter, resp any, scanFunc ScanFunc) error
+	RunRaw(query string, args []any, resp any, runFunc RunFunc) error
+	Run(sq SQLConverter, resp any, runFunc RunFunc) error
 	Get(sq SQLConverter, resp any) error
 	Select(sq SQLConverter, resp any) error
 	Exec(sq SQLConverter) error
+	ExecRaw(query string, args ...any) error
 	BatchStruct(query string, items []any) error
 }
 
@@ -23,26 +24,36 @@ type executor struct {
 	runner clickhouse.Conn
 }
 
-func (e *executor) RunRaw(query string, args []any, resp any, scanFunc ScanFunc) error {
+func (e *executor) RunRaw(query string, args []any, resp any, runFunc RunFunc) error {
 	var span trace.Span
 	if e.tracer != nil {
 		e.ctx, span = e.tracer.traceQuery(e.ctx, query, args...)
 		defer span.End()
 	}
 
-	err := scanFunc(e.ctx, e.runner, resp, query, args...)
+	if e.runner == nil {
+		if span != nil {
+
+			span.SetStatus(codes.Error, ErrNoRunner.Error())
+		}
+
+		return ErrNoRunner
+	}
+
+	err := runFunc(e.ctx, e.runner, resp, query, args...)
 	if span != nil {
 		if err != nil {
+			span.RecordError(err)
 			span.SetStatus(codes.Error, err.Error())
 		} else {
-			span.SetStatus(codes.Ok, "succeeded")
+			span.SetStatus(codes.Ok, "success")
 		}
 	}
 
 	return err
 }
 
-func (e *executor) Run(sq SQLConverter, resp any, scanFunc ScanFunc) error {
+func (e *executor) Run(sq SQLConverter, resp any, scanFunc RunFunc) error {
 	query, args, err := sq.ToSQL()
 	if err != nil {
 		return err

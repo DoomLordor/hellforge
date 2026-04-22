@@ -137,8 +137,8 @@ func WithClosers(closers ...func(ctx context.Context) error) Option {
 	}
 }
 
-func WithTracer(tracer trace.Tracer) Option {
+func WithTracing(provider trace.TracerProvider) Option {
 	return func(c *config) {
-		c.tracer = tracer
+		c.provider = provider
 	}
 }

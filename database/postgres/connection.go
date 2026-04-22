@@ -53,7 +53,7 @@ func NewConnection(options ...Option) (Connection, error) {
 	return &connection{
 		writeConnects: writeRobin,
 		readConnects:  readRobin,
-		tracer:        cfg.tracer,
+		tracer:        helpers.ProviderToTracer(cfg.provider, "postgres-connection"),
 		withArgs:      cfg.withArgs,
 		cutQueryLen:   cfg.cutQueryLen,
 		cutArgsLen:    cfg.cutArgsLen,

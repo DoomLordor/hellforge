@@ -40,10 +40,10 @@ func Errorf(err error, message string, args ...any) {
 	baseLogger.Err(err).Msgf(message, args...)
 }
 
-func Fatal(message string) {
-	baseLogger.Fatal().Msg(message)
+func Fatal(err error, message string) {
+	baseLogger.Fatal().Err(err).Msg(message)
 }
 
-func Fatalf(message string, args ...any) {
-	baseLogger.Fatal().Msgf(message, args...)
+func Fatalf(err error, message string, args ...any) {
+	baseLogger.Fatal().Err(err).Msgf(message, args...)
 }

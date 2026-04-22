@@ -7,9 +7,9 @@ import (
 
 type Option func(c *config)
 
-func WithTracer(tracer trace.Tracer) Option {
+func WithTracer(provider trace.TracerProvider) Option {
 	return func(c *config) {
-		c.tracer = tracer
+		c.provider = provider
 	}
 }
 

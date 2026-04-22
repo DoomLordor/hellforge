@@ -8,7 +8,7 @@ import (
 type config struct {
 	writeConnects []*pgxpool.Pool
 	readConnects  []*pgxpool.Pool
-	tracer        trace.Tracer
+	provider      trace.TracerProvider
 	withArgs      bool
 	cutQueryLen   uint
 	cutArgsLen    uint
@@ -16,7 +16,7 @@ type config struct {
 
 func newConfig() *config {
 	return &config{
-		tracer:      nil,
+		provider:    nil,
 		withArgs:    false,
 		cutQueryLen: defaultCuttingSize,
 		cutArgsLen:  defaultCuttingSize,

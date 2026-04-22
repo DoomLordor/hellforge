@@ -1,15 +1,17 @@
 package gateway
 
 import (
+	"time"
+
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
 )
 
 type Option func(c *config)
 
-func WithTracer(tracer trace.Tracer) Option {
+func WithTracing(provider trace.TracerProvider) Option {
 	return func(c *config) {
-		c.tracer = tracer
+		c.provider = provider
 	}
 }
 
@@ -34,5 +36,11 @@ func WithLimit(limit int) Option {
 func WithMaxMessageSize(maxMessageSize int) Option {
 	return func(c *config) {
 		c.maxMessageSize = maxMessageSize
+	}
+}
+
+func WithHandleTimeout(timeout time.Duration) Option {
+	return func(c *config) {
+		c.handleTimeout = timeout
 	}
 }

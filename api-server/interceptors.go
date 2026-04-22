@@ -141,9 +141,10 @@ func (i *interceptors) withTracing() grpc.UnaryServerInterceptor {
 		resp, err = handler(ctx, req)
 		// Mark span status
 		if err != nil {
+			span.RecordError(err)
 			span.SetStatus(otelcodes.Error, err.Error())
 		} else {
-			span.SetStatus(otelcodes.Ok, "succeeded")
+			span.SetStatus(otelcodes.Ok, "success")
 		}
 
 		return resp, err

@@ -14,6 +14,7 @@ type Executor interface {
 	Get(sq SQLConverter, resp any) error
 	Select(sq SQLConverter, resp any) error
 	Exec(sq SQLConverter) error
+	ExecRaw(query string, args ...any) error
 }
 
 type executor struct {
@@ -40,9 +41,10 @@ func (e *executor) RunRaw(query string, args []any, resp any, scanFunc ScanFunc)
 	err := scanFunc(e.ctx, e.runner, resp, query, args...)
 	if span != nil {
 		if err != nil {
+			span.RecordError(err)
 			span.SetStatus(codes.Error, err.Error())
 		} else {
-			span.SetStatus(codes.Ok, "succeeded")
+			span.SetStatus(codes.Ok, "success")
 		}
 	}
 

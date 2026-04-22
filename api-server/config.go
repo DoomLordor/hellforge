@@ -19,7 +19,7 @@ type config struct {
 	http        httpConfig
 	grpc        grpcConfig
 	natsGateway natsGatewayConfig
-	tracer      trace.Tracer
+	provider    trace.TracerProvider
 	metrics     []prometheus.Collector
 	closers     []func(ctx context.Context) error
 }
