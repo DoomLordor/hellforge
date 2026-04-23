@@ -3,7 +3,6 @@ package redis
 import (
 	"context"
 	"errors"
-	"strings"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -40,17 +39,17 @@ var (
 )
 
 // NewClusterClient redis cluster client constructor
-func NewClusterClient(ctx context.Context, clusters, password string, options ...Option) (ClusterClient, error) {
+func NewClusterClient(ctx context.Context, address []string, password string, options ...Option) (ClusterClient, error) {
 	client := redis.NewClusterClient(
 		&redis.ClusterOptions{
-			Addrs:    strings.Split(clusters, ","),
+			Addrs:    address,
 			Password: password,
 		},
 	)
 
 	cfg := newConfig()
-	for _, opt := range options {
-		opt(cfg)
+	for _, option := range options {
+		option(cfg)
 	}
 
 	if cfg.provider != nil {
