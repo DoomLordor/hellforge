@@ -2,6 +2,7 @@ package tracer
 
 import (
 	"context"
+	"crypto/tls"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
@@ -9,17 +10,21 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.24.0"
+	"google.golang.org/grpc/credentials"
 )
 
 // NewJaegerClient initializes an OTLP exporter
-func NewJaegerClient(address, name string) (*sdktrace.TracerProvider, error) {
-	ctx := context.Background()
+func NewJaegerClient(ctx context.Context, address, name string, withTLS bool) (*sdktrace.TracerProvider, error) {
+	credential := otlptracegrpc.WithInsecure()
+	if withTLS {
+		credential = otlptracegrpc.WithTLSCredentials(credentials.NewTLS(&tls.Config{}))
+	}
 
 	// Set up the OTLP trace exporter
 	exporter, err := otlptracegrpc.New(
 		ctx,
 		otlptracegrpc.WithEndpoint(address),
-		otlptracegrpc.WithInsecure(),
+		credential,
 	)
 	if err != nil {
 		return nil, err
